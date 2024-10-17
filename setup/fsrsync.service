@@ -1,0 +1,15 @@
+# Copy to /etc/systemd/system/fsrsync.service
+
+[Unit]
+Description=FSRsync Service
+After=network.target
+
+[Service]
+User=<your-username>
+ExecStart=/usr/bin/python /opt/fsrsync/app/app.py
+Restart=always
+RestartSec=30
+KillMode=process
+
+[Install]
+WantedBy=default.target
