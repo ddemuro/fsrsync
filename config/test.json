@@ -1,0 +1,24 @@
+{
+    "log_level": "INFO",
+    "destinations": [
+        {
+            "destination": "root@client:/root/destination",
+            "options": "-avPrl --delete",
+            "ssh_port": 22,
+            "event_queue_limit": 1,
+            "max_wait_locked": 10,
+            "path": "/root/source",
+            "events": [
+                "IN_MODIFY",
+                "IN_DELETE",
+                "IN_CREATE"
+            ],
+            "pre_sync_commands": [
+                "echo 'Hello World!'"
+            ],
+            "post_sync_commands": [
+                "echo 'Goodbye World!'"
+            ]
+        }
+    ]
+}

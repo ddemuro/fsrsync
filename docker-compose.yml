@@ -1,0 +1,27 @@
+services:
+  client:
+    build: .
+    image: fsrsync
+    container_name: client
+    environment:
+      - OPERATION=notsyncapp
+    volumes:
+      - ./test/destination:/root/destination
+    networks:
+      - shared-net
+
+  server:
+    build: .
+    image: fsrsync
+    container_name: server
+    environment:
+      - OPERATION=sync
+    volumes:
+      - ./config/test.json:/etc/fsrsync/config.json
+      - ./test/source:/root/source
+    networks:
+      - shared-net
+
+networks:
+  shared-net:
+    driver: bridge
