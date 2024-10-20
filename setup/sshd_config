@@ -1,0 +1,11 @@
+# /etc/ssh/sshd_config
+
+Port 22
+
+# Allow SSH access only from this IP address (replace with your Docker host IP)
+PermitRootLogin yes
+PasswordAuthentication yes
+PubkeyAuthentication no
+
+# Disable root login to prevent unauthorized access
+StrictModes yes
