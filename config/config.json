@@ -1,23 +1,14 @@
 {
+    "log_level": "INFO",
     "destinations": [
         {
             "destination": "user1@remote:/path/to/destination1",
             "options": "-avz",
             "event_queue_limit": 10,
-            "paths": [
-                {
-                    "path": "/path/to/directory1",
-                    "events": [
-                        "IN_CREATE",
-                        "IN_MODIFY"
-                    ]
-                },
-                {
-                    "path": "/path/to/directory2",
-                    "events": [
-                        "IN_DELETE"
-                    ]
-                }
+            "path": "/path/to/directory1",
+            "events": [
+                "IN_CREATE",
+                "IN_MODIFY"
             ]
         },
         {
@@ -26,14 +17,16 @@
             "ssh_key": "/path/to/ssh/key",
             "ssh_port": 22,
             "event_queue_limit": 5,
-            "paths": [
-                {
-                    "path": "/path/to/directory3",
-                    "events": [
-                        "IN_MODIFY",
-                        "IN_DELETE"
-                    ]
-                }
+            "path": "/path/to/directory3",
+            "events": [
+                "IN_MODIFY",
+                "IN_DELETE"
+            ],
+            "pre_sync_commands": [
+                "echo 'Hello World!'"
+            ],
+            "post_sync_commands": [
+                "echo 'Goodbye World!'"
             ]
         }
     ]
