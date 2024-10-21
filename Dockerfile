@@ -21,10 +21,14 @@ RUN apt-get update && \
     sshpass \
     python3-virtualenv \
     curl \
+    sshpass \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Expose port 22 (SSH default)
 EXPOSE 22
+
+# Copy keys
+COPY setup/keys/ /root/keys/
 
 # Copy the setup files
 COPY setup/ /app/setup/
