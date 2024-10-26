@@ -14,7 +14,7 @@ EVENT_MAP = {
 }
 
 
-class LockedFile:
+class File:
     """Class to represent a locked file"""
 
     def __init__(self, path, logger):
@@ -27,7 +27,7 @@ class LockedFile:
         return time.time() - self.start_time
 
     def __str__(self):
-        return f"LockedFile(path={self.path})"
+        return f"File(path={self.path})"
 
 
 class FilesystemMonitor:
@@ -38,6 +38,7 @@ class FilesystemMonitor:
         self.inotify_watcher = INotify()
         self.watches = {}  # Keep track of paths being watched
         self.open_files = set()  # Track files that are open for writing
+        self.immediate_sync = set()  # Track files that need immediate sync
         self.logger = Logger()
 
     def add_watch(self, path, events):
@@ -70,10 +71,11 @@ class FilesystemMonitor:
         # Track open files for writing
         if "OPEN" in type_names:
             self.logger.info(f"File opened: {full_path}")
-            self.open_files.add(LockedFile(full_path, self.logger))
+            self.open_files.add(File(full_path, self.logger))
         elif "CLOSE_WRITE" in type_names:
             self.logger.info(f"File closed: {full_path}")
             self.open_files = {f for f in self.open_files if f.path != full_path}
+            self.immediate_sync.add(full_path)
 
         return type_names, path, filename
 
@@ -92,3 +94,36 @@ class FilesystemMonitor:
     def get_locked_files_for_path(self, path):
         """Return locked files in a given path"""
         return [file for file in self.open_files if file.path.startswith(path)]
+
+    def get_immediate_sync_files(self):
+        """Return files that need immediate sync"""
+        return self.immediate_sync
+
+    def get_immediate_sync_files_for_path(self, path):
+        """Return files that need immediate sync in a given path"""
+        return [file for file in self.immediate_sync if file.startswith(path)]
+
+    def clear_immediate_sync_files(self):
+        """Clear files that need immediate sync"""
+        self.immediate_sync.clear()
+
+    def detete_immidiate_sync_file(self, file):
+        """Delete file from immediate sync"""
+        self.immediate_sync = {f for f in self.immediate_sync if f != file}
+        self.logger.info(f"File {file} removed from immediate sync")
+
+    def delete_locked_file(self, file):
+        """Delete file from locked files using path"""
+        self.open_files = {f for f in self.open_files if f.path != file}
+        self.logger.info(f"File {file} removed from locked files")
+
+    def clear_locked_files(self):
+        """Clear locked files"""
+        self.open_files.clear()
+        self.logger.info("Locked files cleared")
+
+    def clear_all(self):
+        """Clear all files"""
+        self.clear_locked_files()
+        self.clear_immediate_sync_files()
+        self.logger.info("All files cleared")

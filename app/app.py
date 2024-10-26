@@ -72,41 +72,79 @@ class Application:
 
             # Update event counts and check queue limits for each destination
             for destination in self.destinations:
-                if destination is None:
-                    self.logger.error("Destination is None, skipping...")
-                    continue
-                self.logger.debug(f"Checking destination: {destination}")
-                if path.startswith(destination.get("path")):
-                    destination["event_count"] += 1
+                self.manage_destination_event(destination, path, type_names,
+                                              filename)
 
-                    # Trigger rsync when event count reaches the limit
-                    if destination["event_count"] >= destination["event_queue_limit"]:
-                        # Get locked files in the path that have exceeded the max wait time
-                        should_exclude = (
-                            self.fs_monitor.check_if_locked_files_in_path_exceeded_wait(
-                                destination.get("path"), destination["max_wait_locked"]
-                            )
-                        )
-                        # Delay rsync if there are open files
-                        self.logger.info(
-                            f"Event queue limit reached for destination {destination['rsync_manager'].destination}. Running rsync..."
-                        )
-                        # Should exclude
-                        exclude = None
-                        if not should_exclude:
-                            # Create a list in the format of --exclude={'/path/to/file1','/path/to/file2'}
-                            exclude = (
-                                "{'"
-                                + "','".join(
-                                    self.fs_monitor.get_locked_files_for_path(
-                                        destination.path
-                                    )
-                                )
-                                + "'}"
-                            )
+    def immediate_sync_files_for_destination(self, destination, path):
+        # Check if we have immedeate sync files
+        immediate_sync_files_for_path = self.fs_monitor.get_immediate_sync_files_for_path(
+            path
+        )
+        if immediate_sync_files_for_path:
+            # Only sync the immediate sync files
+            include = (
+                "{'"
+                + "','".join(
+                    self.fs_monitor.get_immediate_sync_files_for_path(destination.path)
+                )
+                + "'}"
+            )
+            destination["rsync_manager"].run(include_list=include)
+            self.logger.info(
+                f"Immediate sync files detected for destination {destination['rsync_manager'].destination}. Running rsync..."
+            )
 
-                        destination["rsync_manager"].run(exclude_list=exclude)
-                        destination["event_count"] = 0
+    def process_regular_sync(self, destination, type_names):
+        """Process regular sync for a destination"""
+        # Check if event is in the list of events to monitor
+        if not any(
+            event in type_names for event in destination["rsync_manager"].events
+        ):
+            return
+
+        # Increment event count for the destination
+        destination["event_count"] += 1
+
+        # Trigger rsync when event count reaches the limit
+        if destination["event_count"] >= destination["event_queue_limit"]:
+            # Get locked files in the path that have exceeded the max wait time
+            should_exclude = (
+                self.fs_monitor.check_if_locked_files_in_path_exceeded_wait(
+                    destination.get("path"), destination["max_wait_locked"]
+                )
+            )
+            # Delay rsync if there are open files
+            self.logger.info(
+                f"Event queue limit reached for destination {destination['rsync_manager'].destination}. Running rsync..."
+            )
+            # Should exclude
+            exclude = None
+            if not should_exclude:
+                # Create a list in the format of --exclude={'/path/to/file1','/path/to/file2'}
+                exclude = (
+                    "{'"
+                    + "','".join(
+                        self.fs_monitor.get_locked_files_for_path(destination.path)
+                    )
+                    + "'}"
+                )
+
+            destination["rsync_manager"].run(exclude_list=exclude)
+            destination["event_count"] = 0
+
+    def manage_destination_event(self, destination, path, type_names, filename):
+        """Manage events for a destination"""
+        # Check if the path is a subdirectory of the destination
+        if destination is None:
+            self.logger.error("Destination is None, skipping...")
+            return
+        # Check destination
+        self.logger.debug(f"Checking destination: {destination}")
+        if path.startswith(destination.get("path")):
+            # Check if we have immedeate sync files
+            self.immediate_sync_files_for_destination(destination, path)
+            # Process regular sync
+            self.process_regular_sync(destination, type_names)
 
 
 """ Main entry point for the application """
