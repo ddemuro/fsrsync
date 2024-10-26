@@ -39,6 +39,7 @@ class FilesystemMonitor:
         self.watches = {}  # Keep track of paths being watched
         self.open_files = set()  # Track files that are open for writing
         self.immediate_sync = set()  # Track files that need immediate sync
+        self.regular_sync = set()  # Track files that need regular sync
         self.logger = Logger()
 
     def add_watch(self, path, events):
@@ -68,23 +69,23 @@ class FilesystemMonitor:
 
         full_path = f"{path}/{filename}" if filename else path
 
+        self.logger.info(f"Event detected: {type_names} on {path}/{filename}")
+
         # Track open files for writing
         if "OPEN" in type_names:
             self.logger.info(f"File opened: {full_path}")
-            self.open_files.add(File(full_path, self.logger))
         elif "CLOSE_WRITE" in type_names:
             self.logger.info(f"File closed: {full_path}")
+            # Remove file from open files
             self.open_files = {f for f in self.open_files if f.path != full_path}
-            self.immediate_sync.add(full_path)
-
-        return type_names, path, filename
+            self.add_immediate_sync_file(File(full_path, self.logger))
+        self.add_regular_sync_file(File(full_path, self.logger))
 
     def has_open_files(self):
         """Check if there are open files for writing"""
         return len(self.open_files) > 0
 
-    def check_if_locked_files_in_path_exceeded_wait(self, path,
-                                                    max_wait_locked):
+    def check_if_locked_files_in_path_exceeded_wait(self, path, max_wait_locked):
         """Check if a file has been locked for too long"""
         for file in self.open_files:
             if file.path == path and file.how_long_locked() > max_wait_locked:
@@ -122,8 +123,56 @@ class FilesystemMonitor:
         self.open_files.clear()
         self.logger.info("Locked files cleared")
 
-    def clear_all(self):
-        """Clear all files"""
-        self.clear_locked_files()
+    def get_regular_sync_files(self):
+        """Return files that need regular sync"""
+        return self.regular_sync
+
+    def get_regular_sync_files_for_path(self, path):
+        """Return files that need regular sync in a given path"""
+        return [file for file in self.regular_sync if file.path.startswith(path)]
+
+    def clear_regular_sync_files(self):
+        """Clear files that need regular sync"""
+        self.regular_sync.clear()
+
+    def delete_regular_sync_file(self, file):
+        """Delete file from regular sync"""
+        self.regular_sync = {f for f in self.regular_sync if f != file}
+        self.logger.info(f"File {file} removed from regular sync")
+
+    def add_regular_sync_file(self, file):
+        """Add file to regular sync"""
+        # Return if file already exists
+        if file in self.regular_sync:
+            return
+        self.regular_sync.add(file)
+        self.logger.info(f"File {file} added to regular sync")
+
+    def add_immediate_sync_file(self, file):
+        """Add file to immediate sync"""
+        # Return if file already exists
+        if file in self.immediate_sync:
+            return
+        self.immediate_sync.add(file)
+        self.logger.info(f"File {file} added to immediate sync")
+
+    def add_to_locked_files(self, file):
+        """Add file to locked files"""
+        # Return if file already exists
+        if file in self.open_files:
+            return
+        self.open_files.add(file)
+        self.logger.info(f"File {file} added to locked files")
+
+    def get_all_events_for_path(self, path):
+        """Return all events for a given path"""
+        return self.get_immediate_sync_files_for_path(
+            path
+        ) + self.get_regular_sync_files_for_path(path)
+
+    def clear_all_sync_files(self):
+        """Clear all files that need sync"""
         self.clear_immediate_sync_files()
-        self.logger.info("All files cleared")
+        self.clear_regular_sync_files()
+        self.clear_locked_files()
+        self.logger.info("All sync files cleared")

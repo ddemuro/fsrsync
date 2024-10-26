@@ -61,25 +61,32 @@ class Application:
                 events.append("IN_OPEN")
             self.fs_monitor.add_watch(path, events)
             rsync_manager.add_path(path)
-
+            # Add destination to the list of destinations
             self.destinations.append(destination_config)
 
     def run(self):
         """Run the application to monitor filesystem events and trigger rsync"""
         for event in self.fs_monitor.event_generator():
-            type_names, path, filename = self.fs_monitor.handle_event(event)
-            self.logger.info(f"Event detected: {type_names} on {path}/{filename}")
+            self.fs_monitor.handle_event(event)
+
+            # Check if there are files pending immediate sync
+            pending_immediate = len(self.fs_monitor.get_immediate_sync_files())
+            pending_regular = len(self.fs_monitor.get_regular_sync_files())
+            self.logger.debug(
+                f"Pending immediate sync files: {pending_immediate}, pending regular sync files: {pending_regular}"
+            )
 
             # Update event counts and check queue limits for each destination
-            for destination in self.destinations:
-                self.manage_destination_event(destination, path, type_names,
-                                              filename)
+            if pending_immediate > 0 or pending_regular > 0:
+                self.logger.debug("Checking event queue limits for destinations...")
+                for destination in self.destinations:
+                    self.manage_destination_event(destination)
 
-    def immediate_sync_files_for_destination(self, destination, path):
+    def immediate_sync_files_for_destination(
+        self, destination, immediate_sync_files_for_path
+    ):
+        """Check if we have immedeate sync files for a destination"""
         # Check if we have immedeate sync files
-        immediate_sync_files_for_path = self.fs_monitor.get_immediate_sync_files_for_path(
-            path
-        )
         if immediate_sync_files_for_path:
             # Only sync the immediate sync files
             include = (
@@ -93,20 +100,14 @@ class Application:
             self.logger.info(
                 f"Immediate sync files detected for destination {destination['rsync_manager'].destination}. Running rsync..."
             )
+            # Remove these files from the immediate sync list
+            for file in self.fs_monitor.get_immediate_sync_files():
+                self.fs_monitor.detete_immidiate_sync_file(file)
 
-    def process_regular_sync(self, destination, type_names):
+    def process_regular_sync(self, destination, events):
         """Process regular sync for a destination"""
-        # Check if event is in the list of events to monitor
-        if not any(
-            event in type_names for event in destination["rsync_manager"].events
-        ):
-            return
-
-        # Increment event count for the destination
-        destination["event_count"] += 1
-
-        # Trigger rsync when event count reaches the limit
-        if destination["event_count"] >= destination["event_queue_limit"]:
+        # Trigger rsync when event count reaches the limit        
+        if len(events) >= destination["event_queue_limit"]:
             # Get locked files in the path that have exceeded the max wait time
             should_exclude = (
                 self.fs_monitor.check_if_locked_files_in_path_exceeded_wait(
@@ -117,6 +118,15 @@ class Application:
             self.logger.info(
                 f"Event queue limit reached for destination {destination['rsync_manager'].destination}. Running rsync..."
             )
+            # Add files in events to the include list
+            include = (
+                "{'"
+                + "','".join(
+                    # Get the paths of files in the events like event.path
+                    [event.path for event in events]
+                )
+                + "'}"
+            )
             # Should exclude
             exclude = None
             if not should_exclude:
@@ -124,15 +134,19 @@ class Application:
                 exclude = (
                     "{'"
                     + "','".join(
-                        self.fs_monitor.get_locked_files_for_path(destination.path)
+                        self.fs_monitor.get_locked_files_for_path(
+                            destination.get("path")
+                        )
                     )
                     + "'}"
                 )
 
-            destination["rsync_manager"].run(exclude_list=exclude)
-            destination["event_count"] = 0
+            destination["rsync_manager"].run(exclude_list=exclude, include_list=include)
+            # Remove these files from the regular sync list
+            for file in events:
+                self.fs_monitor.delete_regular_sync_file(file)
 
-    def manage_destination_event(self, destination, path, type_names, filename):
+    def manage_destination_event(self, destination):
         """Manage events for a destination"""
         # Check if the path is a subdirectory of the destination
         if destination is None:
@@ -140,11 +154,12 @@ class Application:
             return
         # Check destination
         self.logger.debug(f"Checking destination: {destination}")
-        if path.startswith(destination.get("path")):
-            # Check if we have immedeate sync files
-            self.immediate_sync_files_for_destination(destination, path)
-            # Process regular sync
-            self.process_regular_sync(destination, type_names)
+        # Check if we have immedeate sync files
+        self.immediate_sync_files_for_destination(
+            destination, self.fs_monitor.get_immediate_sync_files()
+        )
+        # Process regular sync
+        self.process_regular_sync(destination, self.fs_monitor.get_regular_sync_files())
 
 
 """ Main entry point for the application """
