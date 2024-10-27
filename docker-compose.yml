@@ -1,16 +1,4 @@
 services:
-  client:
-    build: .
-    image: fsrsync
-    container_name: client
-    hostname: client
-    environment:
-      - OPERATION=${OPERATION}
-    volumes:
-      - ./test/destination:/root/destination
-    networks:
-      - shared-net
-
   server:
     build: .
     image: fsrsync
@@ -21,6 +9,22 @@ services:
     volumes:
       - ./config/test.json:/etc/fsrsync/config.json
       - ./test/source:/root/source
+    expose:
+      - 8080:8080
+    networks:
+      - shared-net
+
+  client:
+    build: .
+    image: fsrsync
+    container_name: client
+    hostname: client
+    environment:
+      - OPERATION=${OPERATION}
+    volumes:
+      - ./test/destination:/root/destination
+    expose:
+      - 8081:8081
     networks:
       - shared-net
 

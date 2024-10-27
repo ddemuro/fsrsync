@@ -20,7 +20,9 @@
             "post_sync_commands": [
                 "echo 'Goodbye World!'"
             ],
-            "warning_file_open_time": 86400
+            "warning_file_open_time": 86400,
+            "control_server_port": 8080,
+            "control_server_host": "0.0.0.0"
         }
     ]
 }

@@ -20,19 +20,21 @@ function run() {
 function test() {
     SUCCESS="0"
     echo "Running tests... for $1"
+
     echo "Starting the client to receive files from the server..."
-    export OPERATION="client"
+    export OPERATION="server"
     docker compose build server
     export OPERATION="$1"
     docker compose build client
+
     # Run the client
     docker compose up -d client
-    echo "Wait for 5 seconds for the client to start..."
-    sleep 5
+    echo "Wait for 20 seconds for the client to start..."
+    sleep 20
     echo "Starting the server to send files to the client..."
     # Run the server
     docker compose up server &disown
-    sleep 5
+    sleep 20
 
     #
     # Test adding a file to source, should trigger a send to client
@@ -77,6 +79,7 @@ function test() {
     echo "Stopping the server and client..."
     # Stop the server and client
     docker compose down
+    rm -rf test/destination/source
 }
 
 function exec() {

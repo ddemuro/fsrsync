@@ -15,33 +15,34 @@ if [ $HOSTNAME = "client" ]; then
     cp /root/keys/client/* /root/.ssh/
     chmod 600 /root/.ssh/id_rsa
     chmod 644 /root/.ssh/id_rsa.pub
-else
+fi
+if [ $HOSTNAME = "server" ]; then
     echo "Setting server keys"
     cp /root/keys/server/* /root/.ssh/
     chmod 600 /root/.ssh/id_rsa
     chmod 644 /root/.ssh/id_rsa.pub
 fi
 # Start SSH server in the background
-/usr/sbin/sshd -D &
+/usr/sbin/sshd -D &disown
+# Wait for SSH server to start
+sleep 3
 
 if [ "$OPERATION" == "sync" ]; then
-    echo "Running the container, starting ssh and if parameter 'sync' is privided, starting syncapp"
-    virtualenv -p python3 .venv
+    echo "Running the container as sync operation"
+    virtualenv -p python3 .venv &>> /dev/null
     source .venv/bin/activate
-    pip install -r requirements.txt
+    pip install -r requirements.txt &>> /dev/null
+    echo "Starting the application... with sync operation"
     python3 /app/app.py
-else
-    echo "We are not starting syncapp as the parameter 'sync' is not provided"
 fi
 
 if [ "$OPERATION" == "fullsync" ]; then
-    echo "Running the container, starting ssh and if parameter 'fullsync' is privided, starting syncapp"
-    virtualenv -p python3 .venv
+    echo "Running the container as fullsync operation"
+    virtualenv -p python3 .venv &>> /dev/null
     source .venv/bin/activate
-    pip install -r requirements.txt
+    pip install -r requirements.txt &>> /dev/null
+    echo "Starting the application... with fullsync operation"
     python3 /app/app.py --fullsync
-else
-    echo "We are not starting syncapp as the parameter 'fullsync' is not provided"
 fi
 
 # Keep the container running
