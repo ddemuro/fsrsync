@@ -3,6 +3,7 @@ services:
     build: .
     image: fsrsync
     container_name: client
+    hostname: client
     environment:
       - OPERATION=notsyncapp
     volumes:
@@ -14,6 +15,7 @@ services:
     build: .
     image: fsrsync
     container_name: server
+    hostname: server
     environment:
       - OPERATION=sync
     volumes:

@@ -30,3 +30,7 @@ class ConfigurationManager:
         """Get paths from destinations in configuration"""
         # self.logger.debug(f"Getting destinations from config: {self.config}")
         return self.config.get("destinations", [])
+
+    def get_hostname(self):
+        """Get the hostname from the configuration"""
+        return self.config.get("hostname")

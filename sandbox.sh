@@ -21,6 +21,8 @@ function test() {
     SUCCESS="0"
     echo "Running tests..."
     echo "Starting the client to receive files from the server..."
+    OPERATION=client docker compose build server
+    OPERATION=sync docker compose build client
     # Run the client
     docker compose up -d client
     echo "Wait for 5 seconds for the client to start..."

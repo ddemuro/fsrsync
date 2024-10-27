@@ -1,5 +1,6 @@
 {
-    "log_level": "INFO",
+    "log_level": "DEBUG",
+    "hostname": "server",
     "destinations": [
         {
             "destination": "root@client:/root/destination",
@@ -18,7 +19,8 @@
             ],
             "post_sync_commands": [
                 "echo 'Goodbye World!'"
-            ]
+            ],
+            "warning_file_open_time": 86400
         }
     ]
 }
