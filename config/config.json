@@ -9,7 +9,8 @@
             "events": [
                 "IN_CREATE",
                 "IN_MODIFY"
-            ]
+            ],
+            "warning_file_open_time": 86400
         },
         {
             "destination": "user2@remote:/path/to/destination2",
@@ -27,7 +28,8 @@
             ],
             "post_sync_commands": [
                 "echo 'Goodbye World!'"
-            ]
+            ],
+            "warning_file_open_time": 86400
         }
     ]
 }

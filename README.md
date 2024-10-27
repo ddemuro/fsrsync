@@ -40,42 +40,37 @@ FSRsync can be used in a variety of scenarios, such as:
 * `config.json` file with the following structure:
 ```json
 {
+    "log_level": "INFO",
     "destinations": [
         {
             "destination": "user1@remote:/path/to/destination1",
-            "options": "-avz",
+            "options": "-avz --no-whole-file --delete --inplace",
             "event_queue_limit": 10,
-            "paths": [
-                {
-                    "path": "/path/to/directory1",
-                    "events": [
-                        "IN_CREATE",
-                        "IN_MODIFY"
-                    ]
-                },
-                {
-                    "path": "/path/to/directory2",
-                    "events": [
-                        "IN_DELETE"
-                    ]
-                }
-            ]
+            "path": "/path/to/directory1",
+            "events": [
+                "IN_CREATE",
+                "IN_MODIFY"
+            ],
+            "warning_file_open_time": 86400
         },
         {
             "destination": "user2@remote:/path/to/destination2",
-            "options": "-avz",
+            "options": "-avz --no-whole-file --delete --inplace",
             "ssh_key": "/path/to/ssh/key",
             "ssh_port": 22,
             "event_queue_limit": 5,
-            "paths": [
-                {
-                    "path": "/path/to/directory3",
-                    "events": [
-                        "IN_MODIFY",
-                        "IN_DELETE"
-                    ]
-                }
-            ]
+            "path": "/path/to/directory3",
+            "events": [
+                "IN_MODIFY",
+                "IN_DELETE"
+            ],
+            "pre_sync_commands": [
+                "echo 'Hello World!'"
+            ],
+            "post_sync_commands": [
+                "echo 'Goodbye World!'"
+            ],
+            "warning_file_open_time": 86400
         }
     ]
 }
