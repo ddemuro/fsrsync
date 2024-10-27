@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import argparse
 from utils.logs import Logger
 from utils.rsync import RsyncManager
 from utils.filesystem import FilesystemMonitor
@@ -13,7 +14,7 @@ DEFAULT_CONFIG_FILE = "/etc/fsrsync/config.json"
 class Application:
     """Main application class to monitor filesystem events and trigger rsync"""
 
-    def __init__(self, config_file):
+    def __init__(self, config_file, full_sync=False):
         """Initialize the application with a configuration file"""
         self.config_manager = ConfigurationManager(config_file)
         self.fs_monitor = FilesystemMonitor()
@@ -25,6 +26,7 @@ class Application:
             .config.get("loglevel", "INFO")
             .upper()
         )
+        self.full_sync = full_sync  # Full sync flag
 
     def setup(self):
         """Set up the application by loading configuration and setting up rsync managers"""
@@ -37,6 +39,16 @@ class Application:
         # Set up rsync managers and inotify watchers for each destination
         for dest_config in destinations:
             self.setup_destination(dest_config)
+
+        # If full sync is enabled, sync all files for each destination and exit
+        if self.full_sync:
+            self.logger.info("Full sync enabled. Syncing all files...")
+            for destination in self.destinations:
+                self.logger.info(
+                    f"Running full sync for destination: {destination['rsync_manager'].destination}"
+                )
+                destination["rsync_manager"].run()
+            sys.exit(0)
 
     def run(self):
         """Run the application to monitor filesystem events and trigger rsync"""
@@ -93,7 +105,9 @@ class Application:
             events.append("IN_CLOSE_WRITE")
         if "IN_OPEN" not in events:
             events.append("IN_OPEN")
-        self.fs_monitor.add_watch(path, events)
+        # If full sync is not enabled, add the path to the inotify watcher since its not needed for full sync
+        if not self.full_sync:
+            self.fs_monitor.add_watch(path, events)
         rsync_manager.add_path(path)
         # Add destination to the list of destinations
         self.destinations.append(destination_config)
@@ -182,15 +196,33 @@ class Application:
 
 """ Main entry point for the application """
 if __name__ == "__main__":
-    # If /etc/fsrsync/config.json exists, use it as the configuration file else use args
-    if validate_path(DEFAULT_CONFIG_FILE):
-        config_file = DEFAULT_CONFIG_FILE
-    else:
-        # Check if a configuration file is provided as an argument
-        if len(sys.argv) < 2:
-            print("Usage: python app.py <config_file>")
-            sys.exit(1)
-        config_file = sys.argv[1]
-    app = Application(config_file)
+    parser = argparse.ArgumentParser(description="FSRsync: Filesystem to Rsync")
+    # Add arguments
+    parser.add_argument(
+        "--config_file", nargs="?", default=DEFAULT_CONFIG_FILE,
+        help="Path to the configuration file"
+    )
+    parser.add_argument(
+        "--fullsync", action="store_true",
+        help="Enable full sync mode"
+    )
+
+    # Parse arguments
+    args = parser.parse_args()
+
+    full_sync = False
+    if args.fullsync:
+        full_sync = True
+
+    # Print the arguments
+    print(args)
+
+    # Determine the configuration file
+    if not validate_path(args.config_file):
+        print(f"Invalid configuration file: {args.config_file}")
+        sys.exit(1)
+
+    # Initialize and run the application
+    app = Application(args.config_file, full_sync)
     app.setup()
     app.run()

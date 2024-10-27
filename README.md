@@ -76,6 +76,17 @@ FSRsync can be used in a variety of scenarios, such as:
 }
 ```
 
+**Running full sync from crontab**
+----------------------------------
+
+To run a full sync from crontab, you can use the following command:
+
+```bash
+0 0 * * * /usr/bin/python3 /path/to/fsrsync.py full-sync
+```
+
+This will run a full sync every day at midnight, ensuring that your data is always up-to-date.
+
 **Contribution**
 ----------------
 
