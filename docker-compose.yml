@@ -5,7 +5,7 @@ services:
     container_name: client
     hostname: client
     environment:
-      - OPERATION=notsyncapp
+      - OPERATION=${OPERATION}
     volumes:
       - ./test/destination:/root/destination
     networks:
@@ -17,7 +17,7 @@ services:
     container_name: server
     hostname: server
     environment:
-      - OPERATION=sync
+      - OPERATION=${OPERATION}
     volumes:
       - ./config/test.json:/etc/fsrsync/config.json
       - ./test/source:/root/source

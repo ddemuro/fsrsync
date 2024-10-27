@@ -1,8 +1,10 @@
 FROM python:3.10.15-slim-bullseye
 
+ARG OPERATION
+
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=America/New_York
-ENV OPERATION=syncapp
+ENV OPERATION=${OPERATION}
 
 WORKDIR /app
 

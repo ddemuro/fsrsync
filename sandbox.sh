@@ -19,10 +19,12 @@ function run() {
 
 function test() {
     SUCCESS="0"
-    echo "Running tests..."
+    echo "Running tests... for $1"
     echo "Starting the client to receive files from the server..."
-    OPERATION=client docker compose build server
-    OPERATION=sync docker compose build client
+    export OPERATION="client"
+    docker compose build server
+    export OPERATION="$1"
+    docker compose build client
     # Run the client
     docker compose up -d client
     echo "Wait for 5 seconds for the client to start..."
@@ -106,8 +108,9 @@ function qrt() {
 }
 
 # Check for arguments
-while $1; do
-    case $o in
+echo "Args: 1: $1, 2: $2, 3: $3, 4: $4"
+while [[ $# -gt 0 ]]; do
+    case $1 in
         build)
             build
             ;;
@@ -115,7 +118,14 @@ while $1; do
             run
             ;;
         test)
-            test
+            # If $2 is fullsync, run fullsync test
+            if [ $2 == "fullsync" ]; then
+                echo "Running fullsync test..."
+                test fullsync
+                exit 0
+            fi
+            # Otherwise, run normal test
+            test sync
             ;;
         exec)
             exec $2
@@ -123,13 +133,10 @@ while $1; do
         qrt)
             qrt
             ;;
-        \?)
-            echo "Only 'run, test, build' are valid arguments."
+        *)
+            echo "Error: Only 'run', 'test', 'build', 'exec', or 'qrt' are valid arguments."
             exit 1
             ;;
     esac
+    shift # Shift to the next argument
 done
-
-# If no arguments are provided, print error message and exit
-echo "Error: Please specify either 'run' or 'test' as a parameter."
-exit 1
