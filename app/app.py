@@ -1,3 +1,4 @@
+import os
 import sys
 import argparse
 from sync_app import SyncApplication
@@ -27,11 +28,6 @@ if __name__ == "__main__":
 
     # Print the arguments
     print(args)
-
-    # Determine the configuration file
-    if not validate_path(args.config_file):
-        print(f"Invalid configuration file: {args.config_file}")
-        sys.exit(1)
 
     # Initialize and run the application
     app = SyncApplication(args.config_file, full_sync)

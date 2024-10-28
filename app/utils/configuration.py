@@ -24,7 +24,7 @@ class ConfigurationManager:
         self.logger.debug("Loading configuration")
         with open(self.config_file, "r", encoding="utf-8") as file:
             self.config = json.load(file)
-            # self.logger.debug(f"Loaded configuration: {self.config}")
+            self.logger.debug("Loaded configuration...")
 
     def get_destinations(self):
         """Get paths from destinations in configuration"""
@@ -33,7 +33,7 @@ class ConfigurationManager:
 
     def get_hostname(self):
         """Get the hostname from the configuration"""
-        return self.config.get("hostname")
+        return self.config.get("hostname", None)
 
     def get_webcontrol_port(self):
         """Get the port from the configuration"""

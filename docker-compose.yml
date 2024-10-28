@@ -6,8 +6,9 @@ services:
     hostname: server
     environment:
       - OPERATION=${OPERATION}
+      - ENVFILE="/app/config/test.json"
     volumes:
-      - ./config/test.json:/etc/fsrsync/config.json
+      - ./config:/app/config/
       - ./test/source:/root/source
     expose:
       - 8080:8080
@@ -22,6 +23,7 @@ services:
     environment:
       - OPERATION=${OPERATION}
     volumes:
+      - ./config:/app/config/
       - ./test/destination:/root/destination
     expose:
       - 8081:8081

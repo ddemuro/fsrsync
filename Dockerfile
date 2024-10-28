@@ -1,10 +1,13 @@
 FROM python:3.10.15-slim-bullseye as base
 
 ARG OPERATION
+ARG ENVFILE
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=America/New_York
 ENV OPERATION=${OPERATION}
+
+USER root
 
 WORKDIR /app
 
@@ -13,7 +16,8 @@ RUN echo 'root:test' | chpasswd
 
 # Fix run
 RUN mkdir /var/run/sshd && \
-    chmod 0755 /var/run/sshd
+    chmod 0755 /var/run/sshd && \
+    mkdir -p /etc/fsrsync
 
 # Install rsync, ssh-server, and other dependencies
 RUN apt-get update && \

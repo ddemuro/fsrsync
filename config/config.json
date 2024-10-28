@@ -13,7 +13,7 @@
             ],
             "warning_file_open_time": 86400,
             "control_server_port": 8080,
-            "control_server_host": "127.0.0.1"
+            "control_server_host": "0.0.0.0"
         },
         {
             "destination": "user2@remote:/path/to/destination2",
@@ -22,7 +22,7 @@
             "ssh_port": 22,
             "event_queue_limit": 5,
             "control_server_port": 8081,
-            "control_server_host": "127.0.0.1",
+            "control_server_host": "0.0.0.0",
             "path": "/path/to/directory3",
             "events": [
                 "IN_MODIFY",

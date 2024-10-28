@@ -33,7 +33,9 @@ if [ "$OPERATION" == "sync" ]; then
     source .venv/bin/activate
     pip install -r requirements.txt &>> /dev/null
     echo "Starting the application... with sync operation"
-    python3 /app/app.py
+    ls -la /app/*
+    cat /app/config/test.json
+    python3 /app/app.py --config_file $ENVFILE
 fi
 
 if [ "$OPERATION" == "fullsync" ]; then
@@ -42,7 +44,9 @@ if [ "$OPERATION" == "fullsync" ]; then
     source .venv/bin/activate
     pip install -r requirements.txt &>> /dev/null
     echo "Starting the application... with fullsync operation"
-    python3 /app/app.py --fullsync
+    ls -la /app/*
+    cat /app/config/test.json
+    python3 /app/app.py --config_file $ENVFILE --fullsync
 fi
 
 # Keep the container running
