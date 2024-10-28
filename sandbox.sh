@@ -122,7 +122,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         test)
             # If $2 is fullsync, run fullsync test
-            if [ $2 == "fullsync" ]; then
+            if [ "$2" == "fullsync" ]; then
                 echo "Running fullsync test..."
                 test fullsync
                 exit 0
