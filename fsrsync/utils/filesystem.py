@@ -112,8 +112,14 @@ class FilesystemMonitor:
         """Return locked files in a given path"""
         return [file for file in self.open_files if file.path.startswith(path)]
 
-    def get_immediate_sync_files(self):
+    def get_locked_files(self):
+        """Return locked files"""
+        return self.open_files
+
+    def get_immediate_sync_files(self, path_filter=None):
         """Return files that need immediate sync"""
+        if path_filter:
+            return [file for file in self.immediate_sync if file.path.startswith(path_filter)]
         return self.immediate_sync
 
     def get_immediate_sync_files_for_path(self, path):
@@ -139,17 +145,32 @@ class FilesystemMonitor:
         self.open_files.clear()
         self.logger.info("Locked files cleared")
 
-    def get_regular_sync_files(self):
+    def get_regular_sync_files(self, path_filter=None):
         """Return files that need regular sync"""
+        if path_filter:
+            return [file for file in self.regular_sync if file.path.startswith(path_filter)]
         return self.regular_sync
 
     def get_regular_sync_files_for_path(self, path):
         """Return files that need regular sync in a given path"""
         return [file for file in self.regular_sync if file.path.startswith(path)]
 
-    def clear_regular_sync_files(self):
+    def clear_regular_sync_files(self, path_filter=None):
         """Clear files that need regular sync"""
-        self.regular_sync.clear()
+        if path_filter:
+            self.regular_sync = {f for f in self.regular_sync if not f.path.startswith(path_filter)}
+        else:
+            self.regular_sync.clear()
+
+    def delete_regular_sync_files_for_path(self, path):
+        """Delete files that need regular sync in a given path"""
+        self.regular_sync = {f for f in self.regular_sync if not f.path.startswith(path)}
+        self.logger.info(f"Files in {path} removed from regular sync")
+
+    def delete_immediate_sync_files_for_path(self, path):
+        """Delete files that need immediate sync in a given path"""
+        self.immediate_sync = {f for f in self.immediate_sync if not f.path.startswith(path)}
+        self.logger.info(f"Files in {path} removed from immediate sync")
 
     def delete_regular_sync_file(self, full_path):
         """Delete file from regular sync"""

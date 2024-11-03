@@ -113,10 +113,12 @@ class SyncApplication:
                 self.logger.debug("Checking event queue limits for destinations...")
                 for destination in self.destinations:
                     # Call self.manage_destination_event(destination) in a separate thread
-                    thread = threading.Thread(
-                        target=self.manage_destination_event, args=(destination,)
-                    )
-                    thread.start()
+                    # Check if destination is locked, don't run if it is
+                    if not destination.get("locked_on_sync"):
+                        thread = threading.Thread(
+                            target=self.manage_destination_event, args=(destination,)
+                        )
+                        thread.start()
 
     def setup_destination(self, dest_config):
         """Set up a destination with an rsync manager and inotify watcher"""
@@ -152,6 +154,7 @@ class SyncApplication:
             "event_queue_limit": event_queue_limit,
             "event_count": 0,
             "path": path,
+            "locked_on_sync": False,
             "control_server_secret": dest_config.get("control_server_secret", None),
             "notify_file_locks": dest_config.get("notify_file_locks", False),
             "use_global_server_lock": dest_config.get("use_global_server_lock", False),
@@ -245,7 +248,7 @@ class SyncApplication:
                 # Notify remote server of locked files
                 if webc is not None:
                     webc.add_file_to_locked_files(include)
-            
+
             destination["rsync_manager"].run(exclude_list=exclude, include_list=include)
             # Remove these files from the regular sync list
             for file in events:
@@ -261,6 +264,12 @@ class SyncApplication:
         # Check if the path is a subdirectory of the destination
         if destination is None:
             self.logger.error("Destination is None, skipping...")
+            return
+        if destination.get("locked_on_sync"):
+            self.logger.info(
+                f"Destination {destination['rsync_manager'].destination} is locked. Sleeping 30 seconds until lock is clear..."
+            )
+            time.sleep(30)
             return
         # While destination server is in global server locks, wait
         waited_for = 0
@@ -292,9 +301,17 @@ class SyncApplication:
         # Check destination
         self.logger.debug(f"Checking destination: {destination}")
 
+        destination["locked_on_sync"] = True
         # Check if we have immedeate sync files
         self.immediate_sync_files_for_destination(
-            destination, self.fs_monitor.get_immediate_sync_files()
+            destination,
+            self.fs_monitor.get_immediate_sync_files(destination.get("path")),
         )
         # Process regular sync
-        self.process_regular_sync(destination, self.fs_monitor.get_regular_sync_files())
+        self.process_regular_sync(
+            destination, self.fs_monitor.get_regular_sync_files(destination.get("path"))
+        )
+        # After every sync clear pending files
+        self.fs_monitor.delete_regular_sync_files_for_path(destination.get("path"))
+        self.fs_monitor.delete_immediate_sync_files_for_path(destination.get("path"))
+        destination["locked_on_sync"] = False

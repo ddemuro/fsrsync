@@ -77,12 +77,15 @@ class RsyncManager:
         if len(self.pre_sync_commands_local) > 0:
             print("Running pre-sync commands...")
             for command in self.pre_sync_commands_local:
+                if not command:
+                    continue
                 run_command(command)
-            run_command(self.pre_sync_commands_local)
 
         if len(self.pre_sync_commands_remote) > 0:
             print("Running pre-sync commands...")
             for command in self.pre_sync_commands_remote:
+                if not command:
+                    continue
                 run_ssh_command(command,
                                 self.destination.split("@")[1],
                                 self.destination.split("@")[0],
@@ -115,7 +118,7 @@ class RsyncManager:
             self.logger.info(f"Only syncing files in include list: {include_list}, rsync command: {rsync_command}")
         else:
             rsync_command = f"rsync {options} {paths_str} {self.destination}:{self.destination_path}"
-            self.logger.info(f"Running rsync command: {rsync_command}")
+            self.logger.info(f"Running regular rsync command: {rsync_command}")
         rsync_log = run_command(rsync_command)
         if rsync_log:
             self.logger.info(f"Rsync return code: {rsync_log.returncode}, stdout: {rsync_log.stdout}, stderr: {rsync_log.stderr}")
@@ -124,10 +127,14 @@ class RsyncManager:
         if len(self.post_sync_commands_local) > 0:
             print("Running post-sync commands...")
             for command in self.post_sync_commands_local:
+                if not command:
+                    continue
                 run_command(command)
         if len(self.post_sync_commands_remote) > 0:
             print("Running post-sync commands...")
             for command in self.post_sync_commands_remote:
+                if not command:
+                    continue
                 run_ssh_command(command,
                                 self.destination.split("@")[1],
                                 self.destination.split("@")[0],

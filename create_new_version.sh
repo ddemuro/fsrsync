@@ -33,6 +33,14 @@ cp setup.py setup.py.bak
 sed -i "s/#TAG_VERSION#/$1/" setup.py
 
 echo "Making sure you have all you need"
+# Create virtualenv if .venv does not exist
+if [ ! -d .venv ]; then
+        echo "Creating virtualenv"
+        virtualenv -p python3 .venv
+fi
+# Activate virtualenv
+source .venv/bin/activate
+# Install requirements
 pip install -U pip pep517 twine
 
 echo "Creating virtualenv to run build"
