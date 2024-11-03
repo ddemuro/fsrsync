@@ -57,7 +57,12 @@ class WebControl:
                 self.remove_from_global_server_lock,
                 methods=["POST"],
             )
+            self.app.add_api_route("/", self.list_routes, methods=["GET"])
             self.logger.info("Web control routes defined.")
+
+    def list_routes(self):
+        """List the routes"""
+        return self.app.routes
 
     def check_if_secret_in_header(self, headers):
         """Check if secret is in the header"""
@@ -132,7 +137,7 @@ class WebControl:
 
     def run(self):
         """Run the web application"""
-        uvicorn.run(self.app, host=self.host, port=self.port, reload=True)
+        uvicorn.run(self.app, host=self.host, port=self.port, reload=True, workers=2)
 
     def start(self):
         """Start the FastAPI app in a separate thread"""

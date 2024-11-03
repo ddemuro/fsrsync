@@ -245,7 +245,7 @@ class SyncApplication:
                 # Notify remote server of locked files
                 if webc is not None:
                     webc.add_file_to_locked_files(include)
-
+            
             destination["rsync_manager"].run(exclude_list=exclude, include_list=include)
             # Remove these files from the regular sync list
             for file in events:

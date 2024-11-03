@@ -59,12 +59,27 @@ class RsyncManager:
 
     def run(self, exclude_list=None, include_list=None):
         """Run rsync with the specified options, paths, and destination"""
+
+        # Ensure no excluded files are included in the include list
+        if exclude_list and include_list:
+            exclude_list = self.dedupe_a_list(exclude_list)
+            include_list = self.dedupe_a_list(include_list)
+            for exclude_item in exclude_list:
+                if exclude_item in include_list:
+                    include_list.remove(exclude_item)
+
+        # Don't run if include list is empty
+        if include_list and len(include_list) == 0:
+            self.logger.info("Include list is empty, skipping rsync.")
+            return
+
         # Run pre-sync commands
         if len(self.pre_sync_commands_local) > 0:
             print("Running pre-sync commands...")
             for command in self.pre_sync_commands_local:
                 run_command(command)
             run_command(self.pre_sync_commands_local)
+
         if len(self.pre_sync_commands_remote) > 0:
             print("Running pre-sync commands...")
             for command in self.pre_sync_commands_remote:
