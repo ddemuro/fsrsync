@@ -1,10 +1,13 @@
 {
     "log_level": "INFO",
     "hostname": "server",
+    "control_server_port": 8080,
+    "control_server_host": "0.0.0.0",
+    "control_server_secret": "secret",
     "destinations": [
         {
             "destination": "user1@remote:/path/to/destination1",
-            "options": "-avz --no-whole-file --delete --inplace",
+            "options": "-az --no-whole-file --delete --inplace",
             "event_queue_limit": 10,
             "path": "/path/to/directory1",
             "events": [
@@ -17,7 +20,7 @@
         },
         {
             "destination": "user2@remote:/path/to/destination2",
-            "options": "-avz --no-whole-file --delete --inplace",
+            "options": "-az --no-whole-file --delete --inplace",
             "ssh_key": "/path/to/ssh/key",
             "ssh_port": 22,
             "event_queue_limit": 5,
@@ -28,10 +31,16 @@
                 "IN_MODIFY",
                 "IN_DELETE"
             ],
-            "pre_sync_commands": [
+            "pre_sync_commands_local": [
                 "echo 'Hello World!'"
             ],
-            "post_sync_commands": [
+            "post_sync_commands_local": [
+                "echo 'Goodbye World!'"
+            ],
+            "pre_sync_commands_remote": [
+                "echo 'Hello World!'"
+            ],
+            "post_sync_commands_remote": [
                 "echo 'Goodbye World!'"
             ],
             "warning_file_open_time": 86400
