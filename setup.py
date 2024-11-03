@@ -11,7 +11,7 @@ setup(name='fsrsync',
       include_package_data=True,
       # Remove comments below to add additional packages
       packages=[
-            'takelan_core'
+            'app'
       ],
       package_dir={'app/config': 'app/config'},
       package_data={
