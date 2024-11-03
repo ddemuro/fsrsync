@@ -1,7 +1,7 @@
 **FSRsync**
 ================
 
-![Logo](https://github.com/ddemuro/fsrsync/blob/main/assets/logo.jpg?raw=true)
+![Logo](https://github.com/ddemuro/fsrsync/blob/main/logo.jpg?raw=true)
 
 Monitor filesystem changes and keep two systems in sync with FSRsync!
 
