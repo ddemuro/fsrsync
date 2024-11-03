@@ -1,0 +1,36 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Python fsrsync run",
+        "type": "debugpy",
+        "request": "launch",
+        // "module": "flask",
+        "env": {
+            "FLASK_DEBUG": "1",
+        },
+        "args": [
+            "run",
+            "--port",
+            "5000"
+        ],
+        "envFile": "${workspaceFolder}/.venv",
+        "program": "${workspaceRoot}/app/main.py",
+        "jinja": true
+    },
+    {
+      "name": "Python Flask-Tests",
+      "type": "debugpy",
+      "request": "launch",
+      //"module": "flask",
+      "env": {
+          "ENVIRONMENT": "development",
+      },
+      "args": [],
+      "envFile": "${workspaceFolder}/.venv",
+      "program": "${workspaceRoot}/test/run_tests.py",
+      "jinja": true
+    }
+    ]
+  }
+  

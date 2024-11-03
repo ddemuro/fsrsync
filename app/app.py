@@ -4,9 +4,10 @@ import time
 import argparse
 from utils.logs import Logger
 from utils.rsync import RsyncManager
+from utils.utils import validate_path
 from utils.filesystem import FilesystemMonitor
 from utils.configuration import ConfigurationManager
-from utils.utils import validate_path
+from utils.sentry import setup_sentry
 
 DEFAULT_CONFIG_FILE = "/etc/fsrsync/config.json"
 
@@ -26,6 +27,9 @@ class Application:
             .config.get("loglevel", "INFO")
             .upper()
         )
+        # Set up Sentry for error logging
+        setup_sentry(self.logger,
+                     self.config_manager.get_instance(config_file).config.get("SENTRY_DSN", None))
         self.full_sync = full_sync  # Full sync flag
 
     def setup(self):
