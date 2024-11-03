@@ -37,6 +37,11 @@ def main():
     # Print the arguments
     print(args)
 
+    if args.setup:
+        setup()
+        print("Exiting...")
+        sys.exit(0)
+
     # Initialize and run the application
     app = SyncApplication(args.config_file, full_sync)
     app.setup()
@@ -50,10 +55,13 @@ def setup():
     # Create /etc/fsrsync/config.json if it does not exist
     if not os.path.exists("/etc/fsrsync"):
         os.makedirs("/etc/fsrsync")
+        print("Created /etc/fsrsync directory")
     if not os.path.exists(DEFAULT_CONFIG_FILE):
         shutil.copyfile("config/config.json", DEFAULT_CONFIG_FILE)
+        print("Created /etc/fsrsync/config.json")
     # Print a message to the user
     print("FSRsync setup complete")
+
 
 """ Main entry point for the application """
 if __name__ == "__main__":
