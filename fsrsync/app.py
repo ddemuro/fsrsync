@@ -57,7 +57,7 @@ def setup():
         os.makedirs("/etc/fsrsync")
         print("Created /etc/fsrsync directory")
     if not os.path.exists(DEFAULT_CONFIG_FILE):
-        shutil.copyfile("config/config.json", DEFAULT_CONFIG_FILE)
+        shutil.copyfile("../config/config.json", DEFAULT_CONFIG_FILE)
         print("Created /etc/fsrsync/config.json")
     # Print a message to the user
     print("FSRsync setup complete")
