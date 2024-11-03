@@ -114,7 +114,7 @@ class RsyncManager:
         # Construct rsync command
         # If include_list is provided, use it to sync only the specified files
         if include_list:
-            rsync_command = f"rsync {options} {self.destination}:{self.destination_path}"
+            rsync_command = f"rsync {options} --stats {self.destination}:{self.destination_path}"
             self.logger.info(f"Only syncing files in include list: {include_list}, rsync command: {rsync_command}")
         else:
             rsync_command = f"rsync {options} {paths_str} {self.destination}:{self.destination_path}"
