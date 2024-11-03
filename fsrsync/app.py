@@ -1,6 +1,6 @@
 import os
 import sys
-import shutil
+import json
 import argparse
 # Fix path so that we can import the sync_app module
 sys.path.append('..')
@@ -57,7 +57,17 @@ def setup():
         os.makedirs("/etc/fsrsync")
         print("Created /etc/fsrsync directory")
     if not os.path.exists(DEFAULT_CONFIG_FILE):
-        shutil.copyfile("../config/config.json", DEFAULT_CONFIG_FILE)
+        config_dict = {
+            "log_level": "DEBUG",
+            "hostname": "client",
+            "control_server_port": 8080,
+            "control_server_host": "0.0.0.0",
+            "control_server_secret": "secret",
+            "destinations": []
+        }
+        CONFIG_TO_WRITE = json.dumps(config_dict, indent=4)
+        with open(DEFAULT_CONFIG_FILE, "w", encoding="utf-8") as f:
+            f.write(CONFIG_TO_WRITE)
         print("Created /etc/fsrsync/config.json")
     # Print a message to the user
     print("FSRsync setup complete")
