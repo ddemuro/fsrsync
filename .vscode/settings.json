@@ -1,0 +1,23 @@
+{
+  "python.envFile": "${workspaceFolder}/.venv",
+  "files.exclude": {
+    "**/.DS_Store": true,
+    "**/.git": true,
+    "**/.hg": true,
+    "**/.svn": true,
+    "**/CVS": true,
+    "**/*.pyc": true,
+    "**/__pycache__": true,
+    "**/.mypy_cache": true
+  },
+  "editor.rulers": [
+    120
+  ],
+  "editor.suggestSelection": "first",
+  "vsintellicode.modify.editor.suggestSelection": "automaticallyOverrodeDefaultValue",
+  "python.languageServer": "Jedi",
+  "python.analysis.extraPaths": [],
+  "python.analysis.completeFunctionParens": true,
+  "python.analysis.diagnosticMode": "workspace",
+  "prettier.printWidth": 120,
+}
