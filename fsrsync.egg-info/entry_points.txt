@@ -1,0 +1,2 @@
+[console_scripts]
+fsrsync = app.app:main

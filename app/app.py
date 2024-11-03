@@ -1,8 +1,5 @@
-import os
-import sys
 import argparse
-from sync_app import SyncApplication
-from utils.utils import validate_path
+from .sync_app import SyncApplication
 
 DEFAULT_CONFIG_FILE = "/etc/fsrsync/config.json"
 
