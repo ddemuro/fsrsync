@@ -2,14 +2,14 @@ import os
 import sys
 import time
 import threading
-from utils.logs import Logger
-from web_app import WebControl
-from utils.rsync import RsyncManager
-from utils.sentry import setup_sentry
-from utils.utils import validate_path
-from utils.filesystem import FilesystemMonitor
-from utils.configuration import ConfigurationManager
-from utils.web_client import WebClient
+from .utils.logs import Logger
+from .web_app import WebControl
+from .utils.rsync import RsyncManager
+from .utils.sentry import setup_sentry
+from .utils.utils import validate_path
+from .utils.filesystem import FilesystemMonitor
+from .utils.configuration import ConfigurationManager
+from .utils.web_client import WebClient
 
 
 class SyncApplication:

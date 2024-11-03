@@ -2,6 +2,7 @@ from .logs import Logger
 from .utils import run_command
 from .ssh_lib import run_ssh_command
 
+
 class RsyncManager:
     """Class to manage rsync operations"""
 

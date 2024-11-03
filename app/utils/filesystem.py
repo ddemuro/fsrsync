@@ -1,7 +1,6 @@
 import time
 from .logs import Logger
 from inotify_simple import INotify, flags
-from utils.lockedmanager import PendingLocked
 
 
 # Map human-readable event names to inotify constants

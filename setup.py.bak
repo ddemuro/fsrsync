@@ -10,9 +10,14 @@ setup(
     license='Copyright 2019-2022 Derek Demuro',
     include_package_data=True,
     packages=['app'],
-    package_dir={'app': 'app', 'app/config': 'app/config'},
+    package_dir={
+        'app': 'app',
+        'app/utils': 'app/utils',
+        'app/config': 'app/config'
+        },
     package_data={
         'app': ['*'],
+        'app/utils': ['*.py'],
         'app/config': ['*.json'],
     },
     install_requires=[

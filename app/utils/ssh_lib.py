@@ -3,6 +3,7 @@ import os
 import paramiko
 from .utils import validate_path
 
+
 def log_output(output, logger):
     """Log the output to the logger"""
     if logger:

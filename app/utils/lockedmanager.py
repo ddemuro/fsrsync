@@ -2,7 +2,7 @@ import os
 import time
 import threading
 from .wrappers import singleton
-from .utils import validate_path, is_file_open
+from .utils import is_file_open
 
 
 class LockedFile:
