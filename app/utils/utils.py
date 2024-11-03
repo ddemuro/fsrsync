@@ -17,10 +17,10 @@ def run_command(command, **kwargs):
     print(captured_output)
     """
     try:
-        return subprocess.run(command, shell=True, **kwargs)
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Command failed with return code {e.returncode}: {e.output}")
-        return e
+        return subprocess.run(command, shell=True, check=True, **kwargs)
+    except Exception as e:  # pylint: disable=broad-except
+        logger.error(f"Command failed with return code {e}")
+        return None
 
 
 def pipe_processes(read_process, write_process, input_file=None, output_file=None):

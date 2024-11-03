@@ -1,28 +1,41 @@
 {
     "log_level": "DEBUG",
     "hostname": "server",
+    "control_server_port": 8080,
+    "control_server_host": "0.0.0.0",
+    "control_server_secret": "secret",
     "destinations": [
         {
-            "destination": "root@client:/root/destination",
+            "destination": "root@client",
+            "destination_path": "/root/destination",
             "options": "-avPrl --delete",
             "ssh_port": 22,
+            "enabled": true,
             "event_queue_limit": 1,
             "max_wait_locked": 10,
+            "use_global_server_lock": true,
+            "notify_file_locks": true,
+            "control_server_secret": "secret",
+            "control_server_port": 8080,
             "path": "/root/source",
             "events": [
                 "IN_MODIFY",
                 "IN_DELETE",
                 "IN_CREATE"
             ],
-            "pre_sync_commands": [
-                "echo 'Hello World!'"
+            "pre_sync_commands_local": [
+                "echo 'Hello World Local!'"
             ],
-            "post_sync_commands": [
-                "echo 'Goodbye World!'"
+            "post_sync_commands_local": [
+                "echo 'Goodbye World Local!'"
             ],
-            "warning_file_open_time": 86400,
-            "control_server_port": 8080,
-            "control_server_host": "0.0.0.0"
+            "pre_sync_commands_remote": [
+                "echo 'Hello World! Remote'"
+            ],
+            "post_sync_commands_remote": [
+                "echo 'Goodbye World! Remote'"
+            ],
+            "warning_file_open_time": 86400
         }
     ]
 }

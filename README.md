@@ -1,6 +1,8 @@
 **FSRsync**
 ================
 
+![Logo](https://github.com/ddemuro/fsrsync/blob/main/assets/logo.webp?raw=true)
+
 Monitor filesystem changes and keep two systems in sync with FSRsync!
 
 **Overview**
@@ -37,44 +39,6 @@ FSRsync can be used in a variety of scenarios, such as:
 * Python 3.6+
 * rsync
 * inotify (Linux only)
-* `config.json` file with the following structure:
-```json
-{
-    "log_level": "INFO",
-    "destinations": [
-        {
-            "destination": "user1@remote:/path/to/destination1",
-            "options": "-avz --no-whole-file --delete --inplace",
-            "event_queue_limit": 10,
-            "path": "/path/to/directory1",
-            "events": [
-                "IN_CREATE",
-                "IN_MODIFY"
-            ],
-            "warning_file_open_time": 86400
-        },
-        {
-            "destination": "user2@remote:/path/to/destination2",
-            "options": "-avz --no-whole-file --delete --inplace",
-            "ssh_key": "/path/to/ssh/key",
-            "ssh_port": 22,
-            "event_queue_limit": 5,
-            "path": "/path/to/directory3",
-            "events": [
-                "IN_MODIFY",
-                "IN_DELETE"
-            ],
-            "pre_sync_commands": [
-                "echo 'Hello World!'"
-            ],
-            "post_sync_commands": [
-                "echo 'Goodbye World!'"
-            ],
-            "warning_file_open_time": 86400
-        }
-    ]
-}
-```
 
 **Running full sync from crontab**
 ----------------------------------
@@ -86,6 +50,72 @@ To run a full sync from crontab, you can use the following command:
 ```
 
 This will run a full sync every day at midnight, ensuring that your data is always up-to-date.
+
+**Documentation**
+
+# Configuration File Fields Explained
+
+This configuration file consists of global settings and specific configurations for syncing destinations. Below is a detailed breakdown of each field:
+
+## Global Fields
+
+- **`log_level`**: The logging level of the application. Common values include `DEBUG`, `INFO`, `WARNING`, `ERROR`, and `CRITICAL`. `DEBUG` provides detailed logs useful for debugging.
+
+- **`hostname`**: The name of the server running the application. Used for identification purposes.
+
+- **`control_server_port`**: The port number on which the control server listens for connections. 
+
+- **`control_server_host`**: The host address the control server binds to. `0.0.0.0` allows the server to accept connections from any IP address.
+
+- **`control_server_secret`**: A secret key used for authenticating control server communications to ensure security.
+
+## `destinations` Array
+
+Each entry in the `destinations` array represents a configuration for a specific destination to sync to. Below are the fields explained:
+
+- **`destination`**: The remote user and host (e.g., `root@client`) to which data will be synced.
+
+- **`destination_path`**: The path on the remote system where data will be transferred.
+
+- **`options`**: Additional options for the `rsync` command (e.g., `-avPrl --delete`). These specify flags such as archive mode (`-a`), verbose output (`-v`), preserving permissions (`-P`), and deleting extra files on the destination (`--delete`).
+
+- **`ssh_port`**: The port used for SSH connections to the remote destination. Default is usually `22`.
+
+- **`enabled`**: A Boolean (`true`/`false`) indicating if the destination is active for syncing.
+
+- **`event_queue_limit`**: The maximum number of events that can be queued before processing. This limits the size of the event buffer.
+
+- **`max_wait_locked`**: The maximum time (in seconds) to wait if the global server lock is in place before proceeding with the sync.
+
+- **`use_global_server_lock`**: A Boolean indicating if a global lock should be used to prevent simultaneous syncs.
+
+- **`notify_file_locks`**: A Boolean indicating if notifications should be given when file locks occur.
+
+- **`control_server_secret`**: The secret key specific to the destination for secure communication with the control server.
+
+- **`control_server_port`**: The port used by the control server for this specific destination (typically the same as the global `control_server_port`).
+
+- **`path`**: The source path on the local system from where files will be synced.
+
+- **`events`**: A list of filesystem events that trigger the sync. Examples include:
+  - `IN_MODIFY`: A file is modified.
+  - `IN_DELETE`: A file is deleted.
+  - `IN_CREATE`: A new file is created.
+
+- **`pre_sync_commands_local`**: A list of shell commands to be run locally before the sync process begins.
+
+- **`post_sync_commands_local`**: A list of shell commands to be run locally after the sync process completes.
+
+- **`pre_sync_commands_remote`**: A list of shell commands to be run on the remote system before the sync starts.
+
+- **`post_sync_commands_remote`**: A list of shell commands to be run on the remote system after the sync finishes.
+
+- **`warning_file_open_time`**: The time (in seconds) that triggers a warning if a file remains open for this duration. A high value, like `86400`, represents 24 hours.
+
+---
+
+This structure ensures detailed control over syncing operations, specifying both global and destination-specific configurations. By customizing these settings, users can tailor the application to their specific needs and requirements.
+
 
 **Contribution**
 ----------------

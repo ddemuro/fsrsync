@@ -79,7 +79,7 @@ function test() {
     echo "Stopping the server and client..."
     # Stop the server and client
     docker compose down
-    rm -rf test/destination/source
+    # rm -rf test/destination/source
 }
 
 function exec() {

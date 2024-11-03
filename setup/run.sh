@@ -33,8 +33,7 @@ if [ "$OPERATION" == "sync" ]; then
     source .venv/bin/activate
     pip install -r requirements.txt &>> /dev/null
     echo "Starting the application... with sync operation"
-    ls -la /app/*
-    cat /app/config/test.json
+    echo "ENVFILE: $ENVFILE"
     python3 /app/app.py --config_file $ENVFILE
 fi
 
@@ -44,8 +43,7 @@ if [ "$OPERATION" == "fullsync" ]; then
     source .venv/bin/activate
     pip install -r requirements.txt &>> /dev/null
     echo "Starting the application... with fullsync operation"
-    ls -la /app/*
-    cat /app/config/test.json
+    echo "ENVFILE: $ENVFILE"
     python3 /app/app.py --config_file $ENVFILE --fullsync
 fi
 

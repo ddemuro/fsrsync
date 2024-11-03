@@ -42,3 +42,7 @@ class ConfigurationManager:
     def get_webcontrol_host(self):
         """Get the host from the configuration"""
         return self.config.get("control_server_host", "127.0.0.1")
+
+    def get_webcontrol_secret(self):
+        """Get the secret from the configuration"""
+        return self.config.get("control_server_secret", "secret")

@@ -6,7 +6,7 @@ services:
     hostname: server
     environment:
       - OPERATION=${OPERATION}
-      - ENVFILE="/app/config/test.json"
+      - ENVFILE=/app/config/test.json
     volumes:
       - ./config:/app/config/
       - ./test/source:/root/source
@@ -22,6 +22,7 @@ services:
     hostname: client
     environment:
       - OPERATION=${OPERATION}
+      - ENVFILE=/app/config/test_client.json
     volumes:
       - ./config:/app/config/
       - ./test/destination:/root/destination
