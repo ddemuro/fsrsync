@@ -9,10 +9,7 @@ setup(name='fsrsync',
       url='https://www.takelan.com/',
       license='Copyright 2019-2022 Derek Demuro',
       include_package_data=True,
-      app=[
-            'app',
-            'app/config',
-      ],
+      # Remove comments below to add additional packages
       packages=[
             'app'
       ],

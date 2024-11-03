@@ -1,0 +1,14 @@
+LICENSE
+README.md
+setup.py
+app/__init__.py
+app/app.py
+app/log.txt
+app/sync_app.py
+app/web_app.py
+fsrsync.egg-info/PKG-INFO
+fsrsync.egg-info/SOURCES.txt
+fsrsync.egg-info/dependency_links.txt
+fsrsync.egg-info/requires.txt
+fsrsync.egg-info/top_level.txt
+fsrsync.egg-info/zip-safe
