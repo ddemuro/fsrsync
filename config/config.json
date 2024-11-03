@@ -1,5 +1,6 @@
 {
     "log_level": "INFO",
+    "hostname": "server",
     "destinations": [
         {
             "destination": "user1@remote:/path/to/destination1",
@@ -10,7 +11,9 @@
                 "IN_CREATE",
                 "IN_MODIFY"
             ],
-            "warning_file_open_time": 86400
+            "warning_file_open_time": 86400,
+            "control_server_port": 8080,
+            "control_server_host": "0.0.0.0"
         },
         {
             "destination": "user2@remote:/path/to/destination2",
@@ -18,6 +21,8 @@
             "ssh_key": "/path/to/ssh/key",
             "ssh_port": 22,
             "event_queue_limit": 5,
+            "control_server_port": 8081,
+            "control_server_host": "0.0.0.0",
             "path": "/path/to/directory3",
             "events": [
                 "IN_MODIFY",
