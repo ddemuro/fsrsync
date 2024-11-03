@@ -1,3 +1,4 @@
+import sys
 import json
 from .logs import Logger
 
@@ -22,9 +23,18 @@ class ConfigurationManager:
     def load(self):
         """Load configuration from JSON file"""
         self.logger.debug("Loading configuration")
-        with open(self.config_file, "r", encoding="utf-8") as file:
-            self.config = json.load(file)
-            self.logger.debug("Loaded configuration...")
+        try:
+            with open(self.config_file, "r", encoding="utf-8") as file:
+                self.config = json.load(file)
+                self.logger.debug("Loaded configuration...")
+        except FileNotFoundError:
+            self.logger.error(f"Configuration file not found: {self.config_file}")
+            # Exit the program if the configuration file is not found
+            sys.exit(1)
+        except json.JSONDecodeError as e:
+            self.logger.error(f"Error loading configuration: {e}")
+            # Exit the program if there is an error loading the configuration file
+            sys.exit(2)
 
     def get_destinations(self):
         """Get paths from destinations in configuration"""
