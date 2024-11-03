@@ -15,7 +15,7 @@
             "5000"
         ],
         "envFile": "${workspaceFolder}/.venv",
-        "program": "${workspaceRoot}/app/main.py",
+        "program": "${workspaceRoot}/fsrsync/main.py",
         "jinja": true
     },
     {

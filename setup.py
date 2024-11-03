@@ -2,22 +2,22 @@ from setuptools import setup
 
 setup(
     name='fsrsync',
-    version='0.0.5',
+    version='#TAG_VERSION#',
     description='FSRsync is a Python package that provides a simple way to synchronize files between two directories based on inotify with locks.',
     author='Derek Demuro',
     author_email='fsrsync@detrashme.com',
     url='https://www.takelan.com/',
     license='Copyright 2019-2022 Derek Demuro',
     include_package_data=True,
-    packages=['app', 'config', 'app.utils'],
+    packages=['fsrsync', 'config', 'fsrsync.utils'],
     package_dir={
-        'app': 'app',
-        'app.utils': 'app/utils',
+        'fsrsync': 'fsrsync',
+        'fsrsync.utils': 'fsrsync/utils',
         'config': 'config',
         },
     package_data={
-        'app': ['*'],
-        'app.utils': ['*'],
+        'fsrsync': ['*'],
+        'fsrsync.utils': ['*'],
         'config': ['*'],
     },
     install_requires=[
@@ -33,7 +33,7 @@ setup(
     zip_safe=True,
     entry_points={
         'console_scripts': [
-            'fsrsync=app.app:main',
+            'fsrsync=fsrsync.app:main',
         ],
     },
 )

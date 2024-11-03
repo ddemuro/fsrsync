@@ -3,8 +3,8 @@
 # Setup ssh password
 echo "root:test" | chpasswd
 
-# Set app to the working directory
-cd /app
+# Set fsrsync to the working directory
+cd /fsrsync
 
 # Generate keys
 HOSTNAME=$(hostname)
@@ -34,7 +34,8 @@ if [ "$OPERATION" == "sync" ]; then
     pip install -r requirements.txt &>> /dev/null
     echo "Starting the application... with sync operation"
     echo "ENVFILE: $ENVFILE"
-    python3 /app/app.py --config_file $ENVFILE
+    cd /fsrsync
+    python3 app.py --config_file $ENVFILE
 fi
 
 if [ "$OPERATION" == "fullsync" ]; then
@@ -44,7 +45,8 @@ if [ "$OPERATION" == "fullsync" ]; then
     pip install -r requirements.txt &>> /dev/null
     echo "Starting the application... with fullsync operation"
     echo "ENVFILE: $ENVFILE"
-    python3 /app/app.py --config_file $ENVFILE --fullsync
+    cd /fsrsync
+    python3 app.py --config_file $ENVFILE --fullsync
 fi
 
 # Keep the container running

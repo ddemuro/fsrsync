@@ -9,7 +9,7 @@ ENV OPERATION=${OPERATION}
 
 USER root
 
-WORKDIR /app
+WORKDIR /fsrsync
 
 # Set root password
 RUN echo 'root:test' | chpasswd
@@ -37,18 +37,18 @@ EXPOSE 22
 COPY setup/keys/ /root/keys/
 
 # Copy the setup files
-COPY setup/ /app/setup/
-COPY requirements.txt /app/
+COPY setup/ /fsrsync/setup/
+COPY requirements.txt /fsrsync/
 
 # Copy SSH server configuration file
 COPY setup/sshd_config /etc/ssh/sshd_config
 
-# Copy app files
-COPY app/ /app/
-COPY config/ /app/config/
+# Copy fsrsync files
+COPY fsrsync/ /fsrsync/
+COPY config/ /fsrsync/config/
 
 VOLUME /root/destination
 VOLUME /root/source
 
 # Define a custom command to start SSH server and run the script
-CMD ["/bin/bash", "/app/setup/run.sh"]
+CMD ["/bin/bash", "./setup/run.sh"]
