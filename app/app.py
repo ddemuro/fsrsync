@@ -6,8 +6,9 @@ from utils.utils import validate_path
 
 DEFAULT_CONFIG_FILE = "/etc/fsrsync/config.json"
 
-""" Main entry point for the application """
-if __name__ == "__main__":
+
+def main():
+    """Main function for the application"""
     parser = argparse.ArgumentParser(description="FSRsync: Filesystem to Rsync")
     # Add arguments
     parser.add_argument(
@@ -33,3 +34,8 @@ if __name__ == "__main__":
     app = SyncApplication(args.config_file, full_sync)
     app.setup()
     app.run()
+
+
+""" Main entry point for the application """
+if __name__ == "__main__":
+    main()
