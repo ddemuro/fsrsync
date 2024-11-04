@@ -489,10 +489,16 @@ class SyncApplication:
         """Generator to get statistics for each destination"""
         if destination is None:
             return None
+        convert_regular_sync_files_to_list = [
+            file.path for file in regular_sync_files
+        ]
+        convert_immediate_sync_files_to_list = [
+            file.path for file in immediate_sync_files
+        ]
         stats = {
             "path": destination.get("path"),
-            "regular_sync_files": regular_sync_files,
-            "immediate_sync_files": immediate_sync_files,
+            "regular_sync_files": convert_regular_sync_files_to_list,
+            "immediate_sync_files": convert_immediate_sync_files_to_list,
             "regular_sync_files_count": len(regular_sync_files),
             "immediate_sync_files_count": len(immediate_sync_files),
             "event_queue_limit": destination.get("event_queue_limit"),
