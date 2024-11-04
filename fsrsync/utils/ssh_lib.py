@@ -61,12 +61,12 @@ def run_ssh_command(command, host, username="root", ssh_key=None, logger=None):
     try:
         if not host or not command:
             log_output("Host and command are required", logger)
-            return None
+            return None, None, None, None
         if not ssh_key:
             ssh_key = read_linux_user_default_ssh_key()
         if not ssh_key:
             log_output("No SSH key provided or found", logger)
-            return
+            return None, None, None, None
 
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -87,6 +87,6 @@ def run_ssh_command(command, host, username="root", ssh_key=None, logger=None):
         exit_code = stdout.channel.recv_exit_status()
         log_output(f"Running command: {command}, stdout: {output}, stderr: {err}, exit_code: {exit_code}", logger)
         ssh.close()
-        return False, exit_code, output, stderr
+        return exit_code == 0, exit_code, output, stderr
     except Exception as e:  # pylint: disable=broad-except
         log_output(f"Error running ssh command: {e}", logger)
