@@ -10,3 +10,6 @@ EXCLUDE_NONE = []  # Empty list
 DEFAULT_FULL_SYNC = 60  # 1 minute
 CHECK_THREADS_SLEEP = 300  # 5 minutes
 DEFAULT_HTTP_TIMEOUT = 120  # 2 minutes
+WARNING_MAX_TIME_FILE_OPEN = 86400  # 1 day
+DEFAULT_WEB_SERVER_PORT = 8080  # Default web server port
+DEFAULT_SSH_PORT = 22  # Default SSH port

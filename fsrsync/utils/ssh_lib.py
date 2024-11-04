@@ -82,8 +82,8 @@ def run_ssh_command(command, host, username="root", ssh_key=None, logger=None):
 
         stdin, stdout, stderr = ssh.exec_command(
             command, timeout=1000, get_pty=True)
-        output = stdout.read().decode('utf-8')
-        err = stderr.read().decode('utf-8')
+        output = stdout.read().decode("utf-8")
+        err = stderr.read().decode("utf-8")
         exit_code = stdout.channel.recv_exit_status()
         log_output(f"Running command: {command}, stdout: {output}, stderr: {err}, exit_code: {exit_code}", logger)
         ssh.close()

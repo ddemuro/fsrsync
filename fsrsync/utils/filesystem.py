@@ -21,6 +21,8 @@ class File:
         self.extension = path.split(".")[-1]
         self.logger = logger
         self.start_time = time.time()
+        self.successfully_synced = False
+        self.synced_time = None
 
     def how_long_locked(self):
         """Return the time in seconds since the file was locked"""
