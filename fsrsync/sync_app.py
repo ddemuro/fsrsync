@@ -113,8 +113,8 @@ class SyncApplication:
                 self.logger.debug(
                     f"Running full sync for destination: {destination['rsync_manager'].destination}"
                 )
-                destination["rsync_manager"].run()
-            sys.exit(0)
+                destination["rsync_manager"].run(exclude_list=destination.get("files_to_exclude", []))
+            sys.exit(ZERO)
         # Run check locations that need full sync in a separate thread
         self.run_check_locations_that_need_full_sync_in_thread()
 
@@ -217,6 +217,7 @@ class SyncApplication:
             "notify_file_locks": dest_config.get("notify_file_locks", False),
             "use_global_server_lock": dest_config.get("use_global_server_lock", False),
             "statistics": [],
+            "files_to_exclude": dest_config.get("files_to_exclude", []),
             "location_last_full_sync": None,
             "web_client": WebClient(
                 destination_path.split("@")[1],
@@ -283,8 +284,11 @@ class SyncApplication:
             self.logger.info(
                 f"Immediate sync files detected for destination {destination['rsync_manager'].destination}. Running rsync..."
             )
+            # ensure_excludes should be EXCLUDE_ALL + destination.get("files_to_exclude", [])
+            ensure_excludes = destination.get("files_to_exclude", [])
+            ensure_excludes.extend(EXCLUDE_ALL)
             rsync_result, process_result = destination["rsync_manager"].run(
-                exclude=EXCLUDE_ALL, include_list=files_to_sync_paths
+                exclude_list=EXCLUDE_ALL, include_list=files_to_sync_paths
             )
             if rsync_result:
                 self.logger.info(
@@ -345,9 +349,11 @@ class SyncApplication:
                 # Notify remote server of locked files
                 if webc is not None:
                     webc.add_file_to_locked_files(include)
-
+            # ensure_excludes should be EXCLUDE_ALL + destination.get("files_to_exclude", [])
+            ensure_excludes = destination.get("files_to_exclude", [])
+            ensure_excludes.extend(EXCLUDE_ALL)
             rsync_result, app_code_result = destination["rsync_manager"].run(
-                exclude_list=EXCLUDE_ALL, include_list=include
+                exclude_list=ensure_excludes, include_list=include
             )
             if rsync_result:
                 self.logger.info(
@@ -501,7 +507,8 @@ class SyncApplication:
                     self.logger.debug(
                         f"Location {path} has not been synced. Running full sync..."
                     )
-                    destination["rsync_manager"].run()
+                    ensure_excludes = destination.get("files_to_exclude", [])
+                    destination["rsync_manager"].run(exclude_list=ensure_excludes)
                     destination["location_last_full_sync"] = datetime.datetime.now()
                 else:
                     # Check if we need to run a full sync
@@ -515,7 +522,7 @@ class SyncApplication:
                         self.logger.debug(
                             f"Location {path} has not been synced in over {full_sync_interval} minutes. Running full sync..."
                         )
-                        destination["rsync_manager"].run()
+                        destination["rsync_manager"].run(exclude_list=ensure_excludes)
                         destination["location_last_full_sync"] = current_time
             self.logger.debug(
                 f"Sleeping for {CHECK_THREADS_SLEEP} seconds before checking locations that need full sync..."
