@@ -52,6 +52,13 @@ class FilesystemMonitor:
         self.regular_sync = set()  # Track files that need regular sync
         self.logger = Logger()
 
+    def get_aggregated_events(self):
+        """Return all events"""
+        immediate = [f.path for f in self.immediate_sync]
+        regular = [f.path for f in self.regular_sync]
+        locked = [f.path for f in self.open_files]
+        return {"immediate": immediate, "regular": regular, "locked": locked}
+
     def add_watch(self, path, events):
         """Add a watch for events on a given path"""
         event_mask = 0

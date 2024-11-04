@@ -134,6 +134,42 @@ class WebControl:
                 "statistics": destination.get("statistics", {}),
             })
 
+    @app.post("/stats-running")
+    async def stats_running(request: Request):
+        instance = WebControl._instance
+        secret = request.query_params.get("secret")
+
+        if not secret or secret != instance.secret:
+            # If secret is not provided or invalid, return json with error
+            return {"error": "Unauthorized, secret in query string not provided or invalid. example: /stats-running?secret=your_secret_here"}
+        result = []
+        for destination in instance.sync_state.destinations:
+            result.append({
+                "destination": destination.get("path", ""),
+                "destination_config": destination,
+            })
+        # instance remote hosts
+        rh = instance.sync_state.remote_hosts
+        gsl = instance.sync_state.global_server_locks
+        frs = instance.sync_state.files_to_delete_after_sync_regular
+        fia = instance.sync_state.files_to_delete_after_sync_immediate
+        src = instance.sync_state.syncs_running_currently
+        maxstats = instance.sync_state.max_stats
+        fse = instance.sync_state.full_sync
+        aggregate_cel = instance.sync_state.fs_monitor.get_aggregated_events()
+        return {
+            "result": result,
+            "remote_hosts": rh,
+            "global_server_locks": gsl,
+            "files_to_delete_after_sync_regular": frs,
+            "files_to_delete_after_sync_immediate": fia,
+            "syncs_running_currently": src,
+            "max_stats": maxstats,
+            "full_sync": fse,
+            "aggregated_events": aggregate_cel,
+        }
+        
+
     def run(self):
         """Run the web application"""
         uvicorn.run(self.app, host=self.host, port=self.port)
