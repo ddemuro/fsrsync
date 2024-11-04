@@ -534,9 +534,7 @@ class SyncApplication:
                     current_time = datetime.datetime.now()
                     time_diff = current_time - last_full_sync
                     full_sync_interval = destination.get("full_sync_interval", DEFAULT_FULL_SYNC)
-                    if time_diff.minute >= destination.get(
-                        "full_sync_interval", DEFAULT_FULL_SYNC
-                    ):  # 60 minutes
+                    if time_diff.total_seconds() / 60 >= full_sync_interval:
                         self.logger.debug(
                             f"Location {path} has not been synced in over {full_sync_interval} minutes. Running full sync..."
                         )
