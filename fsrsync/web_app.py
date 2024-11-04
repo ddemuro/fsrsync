@@ -134,7 +134,7 @@ class WebControl:
                 "statistics": destination.get("statistics", {}),
             })
 
-    @app.post("/stats-running")
+    @app.get("/stats-running")
     async def stats_running(request: Request):
         instance = WebControl._instance
         secret = request.query_params.get("secret")
