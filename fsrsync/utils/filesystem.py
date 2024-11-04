@@ -5,15 +5,15 @@ from inotify_simple import INotify, flags
 
 # Map human-readable event names to inotify constants
 EVENT_MAP = {
+    "IN_ACCESS": flags.ACCESS,
     "IN_CREATE": flags.CREATE,
     "IN_MODIFY": flags.MODIFY,
     "IN_DELETE": flags.DELETE,
     "IN_MOVED_FROM": flags.MOVED_FROM,
     "IN_MOVED_TO": flags.MOVED_TO,
-    "IN_MOVED_SELF": flags.MOVED_SELF,
+    "IN_MOVE_SELF": flags.MOVE_SELF,
     "IN_DELETE_SELF": flags.DELETE_SELF,
     "IN_OPEN": flags.OPEN,
-    "IN_MOVE_SELF": flags.MOVE_SELF,
     "IN_ATTRIB": flags.ATTRIB,
     "IN_CLOSE_NOWRITE": flags.CLOSE_NOWRITE,
     "IN_CLOSE_WRITE": flags.CLOSE_WRITE,
