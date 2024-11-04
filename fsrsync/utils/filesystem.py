@@ -73,7 +73,7 @@ class FilesystemMonitor:
     def event_generator(self):
         """Generator to yield filesystem events"""
         while True:
-            events = self.inotify_watcher.read(timeout=1000)
+            events = self.inotify_watcher.read(timeout=1000, read_delay=100)
             for event in events:
                 yield event
 
