@@ -99,7 +99,9 @@ class SyncApplication:
                 continue
             # Check if the destination path is already in self.destinations
             for destination in self.destinations:
-                if destination.get("path") == dest_config.get("path"):
+                destination_matches_path = destination.get("path") == dest_config.get("path")
+                destination_matches_dest = destination.get("destination") == dest_config.get("destination")
+                if destination_matches_path and destination_matches_dest:
                     self.logger.error(
                         f"Destination path {dest_config.get('path')} already exists in another destination. Skipping..."
                     )
