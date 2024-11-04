@@ -61,7 +61,16 @@ class RsyncManager:
 
     def format_option(self, options):
         """Return a formatted string of options"""
-        return "'{" + ", ".join(f"'{option}'" for option in options) + "}'"
+        string_cmd = "{"
+        if len(options) == 1:
+            string_cmd += f"'{options[0]}'"
+        else:
+            # Format as a comma-separated list except for the last item
+            for option in options[:-1]:
+                string_cmd += f"'{option}',"
+            string_cmd += f"'{options[-1]}'"
+        string_cmd += "}"
+        return string_cmd
 
     def run(self, exclude_list=None, include_list=None):
         """Run rsync with the specified options, paths, and destination"""
