@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import threading
+import datetime
 from .utils.logs import Logger
 from .web_app import WebControl
 from .utils.rsync import RsyncManager
@@ -148,10 +149,18 @@ class SyncApplication:
             post_sync_commands_local=dest_config.get("post_sync_commands_local", []),
             pre_sync_commands_remote=dest_config.get("pre_sync_commands_remote", []),
             post_sync_commands_remote=dest_config.get("post_sync_commands_remote", []),
-            pre_sync_commands_checkexit_local=dest_config.get("pre_sync_commands_checkexit_local", []),
-            post_sync_commands_checkexit_local=dest_config.get("post_sync_commands_checkexit_local", []),
-            pre_sync_commands_checkexit_remote=dest_config.get("pre_sync_commands_checkexit_remote", []),
-            post_sync_commands_checkexit_remote=dest_config.get("post_sync_commands_checkexit_remote", []),
+            pre_sync_commands_checkexit_local=dest_config.get(
+                "pre_sync_commands_checkexit_local", []
+            ),
+            post_sync_commands_checkexit_local=dest_config.get(
+                "post_sync_commands_checkexit_local", []
+            ),
+            pre_sync_commands_checkexit_remote=dest_config.get(
+                "pre_sync_commands_checkexit_remote", []
+            ),
+            post_sync_commands_checkexit_remote=dest_config.get(
+                "post_sync_commands_checkexit_remote", []
+            ),
         )
         event_queue_limit = dest_config["event_queue_limit"]
         destination_config = {
@@ -214,18 +223,25 @@ class SyncApplication:
         # Grab extensions to ignore
         extensions_to_ignore = destination.get("extensions_to_ignore", [])
         # Remove files with extensions to ignore
+        filtered_files = []
         for file in immediate_sync_files_for_path:
             if file.path.split(".")[-1] in extensions_to_ignore:
+                self.logger.debug(f"Removing file {file.path} from immediate sync")
                 self.fs_monitor.delete_immediate_sync_file(file)
+            else:
+                self.logger.debug(f"Adding file {file.path} to immediate sync")
+                filtered_files.append(file)
         # Check if we have immedeate sync files
-        files_to_sync_paths = [file.path for file in immediate_sync_files_for_path]
+        files_to_sync_paths = [file.path for file in filtered_files]
         if immediate_sync_files_for_path:
             # Only sync the immediate sync files
             include = "{'" + "','".join(files_to_sync_paths) + "'}"
             self.logger.info(
                 f"Immediate sync files detected for destination {destination['rsync_manager'].destination}. Running rsync..."
             )
-            rsync_result, process_result = destination["rsync_manager"].run(include_list=include)
+            rsync_result, process_result = destination["rsync_manager"].run(
+                include_list=include
+            )
             if rsync_result:
                 self.logger.info(
                     f"Rsync completed successfully for destination {destination['rsync_manager'].destination}"
@@ -265,16 +281,9 @@ class SyncApplication:
             self.logger.debug(
                 f"Event queue limit reached for destination {destination['rsync_manager'].destination}. Running rsync..."
             )
-            # Check if we should exclude files by extension
-            extensions_to_ignore = destination.get("extensions_to_ignore", [])
-            filtered_events = []
-            for event in events:
-                if event.path.split(".")[-1] in extensions_to_ignore:
-                    self.fs_monitor.delete_regular_sync_file(event.path)
-                else:
-                    filtered_events.append(event)
+
             # Add files in events to the include list
-            include = [event.path for event in filtered_events]
+            include = [event.path for event in events]
             # Should exclude
             exclude = None
             if not should_exclude:
@@ -293,7 +302,9 @@ class SyncApplication:
                 if webc is not None:
                     webc.add_file_to_locked_files(include)
 
-            rsync_result, app_code_result = destination["rsync_manager"].run(exclude_list=exclude, include_list=include)
+            rsync_result, app_code_result = destination["rsync_manager"].run(
+                exclude_list=exclude, include_list=include
+            )
             if rsync_result:
                 self.logger.info(
                     f"Rsync completed successfully for destination {destination['rsync_manager'].destination}"
@@ -338,6 +349,7 @@ class SyncApplication:
             )
             time.sleep(WAIT_30_SEC)
             return
+
         # While destination server is in global server locks, wait
         waited_for = 0
         while (
@@ -367,6 +379,22 @@ class SyncApplication:
 
         # Check destination
         self.logger.debug(f"Checking destination: {destination}")
+        # Grab extensions to ignore
+        extensions_to_ignore = destination.get("extensions_to_ignore", [])
+        self.logger.debug(f"Extensions to ignore: {extensions_to_ignore}")
+        # Remove files with those extensions from the regular sync list and immediate sync list
+        for file in self.fs_monitor.get_regular_sync_files(destination.get("path")):
+            if file.extension in extensions_to_ignore:
+                self.logger.debug(
+                    f"Removing file {file.path} from regular sync as it has an extension to ignore"
+                )
+                self.fs_monitor.delete_regular_sync_file(file.path)
+        for file in self.fs_monitor.get_immediate_sync_files(destination.get("path")):
+            if file.extension in extensions_to_ignore:
+                self.logger.debug(
+                    f"Removing file {file.path} from immediate sync as it has an extension to ignore"
+                )
+                self.fs_monitor.delete_immediate_sync_file(file)
 
         destination["locked_on_sync"] = True
         # Check if we have immedeate sync files
@@ -383,7 +411,14 @@ class SyncApplication:
         self.fs_monitor.delete_immediate_sync_files_for_path(destination.get("path"))
         destination["locked_on_sync"] = False
 
-    def statistics_generator(self, destination=None, regular_sync_files=None, immediate_sync_files=None, sync_result=False, log_type="regular"):
+    def statistics_generator(
+        self,
+        destination=None,
+        regular_sync_files=None,
+        immediate_sync_files=None,
+        sync_result=False,
+        log_type="regular",
+    ):
         """Generator to get statistics for each destination"""
         if destination is None:
             return None
@@ -394,7 +429,7 @@ class SyncApplication:
             "event_queue_limit": destination.get("event_queue_limit"),
             "event_count": len(regular_sync_files) + len(immediate_sync_files),
             # Get current time
-            "last_sync": time.time(),
+            "last_sync": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "result": sync_result,
             "log_type": log_type,
         }

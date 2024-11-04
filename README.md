@@ -114,7 +114,8 @@ Each entry in the `destinations` array represents a configuration for a specific
 - **`control_server_secret`**: The secret key specific to the destination for secure communication with the control server.
 
 - **`control_server_port`**: The port used by the control server for this specific destination (typically the same as the global `control_server_port`).
-
+- **`control_server_host`**: The host address the control server binds to for this specific destination (typically the same as the global `control_server_host`).
+- **`extensions_to_ignore`**: A list of file extensions to ignore during syncing. For example, `[".log", ".tmp"]` would ignore log and temporary files.
 - **`path`**: The source path on the local system from where files will be synced.
 
 - **`events`**: A list of filesystem events that trigger the sync. Examples include:
