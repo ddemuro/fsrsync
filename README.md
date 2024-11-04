@@ -5,6 +5,26 @@
 
 Monitor filesystem changes and keep two systems in sync with FSRsync!
 
+**Temporary Setup Server**
+--------------------------
+
+We are currently using my company's pypy server to host the setup files. This is a temporary solution until we have a more permanent setup. The server is located at `http://pypy.takelan.com/takelan/fsrsync/`.
+
+**Installation**
+----------------
+
+```bash
+pipx install --index-url="https://pypy.takelan.com/root/takelan/+simple" fsrsync
+```
+
+That should install the latest version of FSRsync on your system. If you encounter any issues, please let us know!
+
+How to run:
+```bash
+/root/.local/bin/fsrsync --setup # To setup the configuration file in /etc/fsrsync/config.json
+/root/.local/bin/fsrsync # To run the application
+```
+
 **Overview**
 -----------
 
