@@ -73,17 +73,17 @@ class FilesystemMonitor:
         self.log_files_opened_for_too_long()
 
         if event_mask & EVENT_MAP["IN_CREATE"]:
-            self.logger.info(f"File created: {full_path}")
+            self.logger.debug(f"File created: {full_path}")
             # Optionally: skip adding this to syncs immediately
 
         if event_mask & EVENT_MAP["IN_OPEN"]:
-            self.logger.info(f"File opened: {full_path}")
+            self.logger.debug(f"File opened: {full_path}")
             self.add_to_locked_files(File(full_path, self.logger))
             return
 
         if event_mask & EVENT_MAP["IN_CLOSE_WRITE"]:
             if full_path in self.open_files:
-                self.logger.info(f"File closed: {full_path}")
+                self.logger.debug(f"File closed: {full_path}")
                 self.delete_locked_file(full_path)
                 self.add_immediate_sync_file(File(full_path, self.logger))
                 return
@@ -133,12 +133,12 @@ class FilesystemMonitor:
     def delete_immediate_sync_file(self, full_path):
         """Delete file from immediate sync"""
         self.immediate_sync = {f for f in self.immediate_sync if f != full_path}
-        self.logger.info(f"File {full_path} removed from immediate sync")
+        self.logger.debug(f"File {full_path} removed from immediate sync")
 
     def delete_locked_file(self, full_path):
         """Delete file from locked files using path"""
         self.open_files = {f for f in self.open_files if f.path != full_path}
-        self.logger.info(f"File {full_path} removed from locked files")
+        self.logger.debug(f"File {full_path} removed from locked files")
 
     def clear_locked_files(self):
         """Clear locked files"""
@@ -165,17 +165,17 @@ class FilesystemMonitor:
     def delete_regular_sync_files_for_path(self, path):
         """Delete files that need regular sync in a given path"""
         self.regular_sync = {f for f in self.regular_sync if not f.path.startswith(path)}
-        self.logger.info(f"Files in {path} removed from regular sync")
+        self.logger.debug(f"Files in {path} removed from regular sync")
 
     def delete_immediate_sync_files_for_path(self, path):
         """Delete files that need immediate sync in a given path"""
         self.immediate_sync = {f for f in self.immediate_sync if not f.path.startswith(path)}
-        self.logger.info(f"Files in {path} removed from immediate sync")
+        self.logger.debug(f"Files in {path} removed from immediate sync")
 
     def delete_regular_sync_file(self, full_path):
         """Delete file from regular sync"""
         self.regular_sync = {f for f in self.regular_sync if f != full_path}
-        self.logger.info(f"File {full_path} removed from regular sync")
+        self.logger.debug(f"File {full_path} removed from regular sync")
 
     def add_regular_sync_file(self, file):
         """Add file to regular sync"""
@@ -184,7 +184,7 @@ class FilesystemMonitor:
             if f.path == file.path:
                 return
         self.regular_sync.add(file)
-        self.logger.info(f"File {file} added to regular sync")
+        self.logger.debug(f"File {file} added to regular sync")
 
     def add_immediate_sync_file(self, file):
         """Add file to immediate sync"""
@@ -193,7 +193,7 @@ class FilesystemMonitor:
             if f.path == file.path:
                 return
         self.immediate_sync.add(file)
-        self.logger.info(f"File {file} added to immediate sync")
+        self.logger.debug(f"File {file} added to immediate sync")
 
     def add_to_locked_files(self, file):
         """Add file to locked files"""
@@ -202,7 +202,7 @@ class FilesystemMonitor:
             if f.path == file.path:
                 return
         self.open_files.add(file)
-        self.logger.info(f"File {file} added to locked files")
+        self.logger.debug(f"File {file} added to locked files")
 
     def get_all_events_for_path(self, path):
         """Return all events for a given path"""

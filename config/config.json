@@ -43,6 +43,18 @@
             "post_sync_commands_remote": [
                 "echo 'Goodbye World!'"
             ],
+            "pre_sync_commands_checkexit_local": [
+                "echo 'Hello World!'"
+            ],
+            "post_sync_commands_checkexit_local": [
+                "echo 'Goodbye World!'"
+            ],
+            "pre_sync_commands_checkexit_remote": [
+                "echo 'Hello World!'"
+            ],
+            "post_sync_commands_checkexit_remote": [
+                "echo 'Goodbye World!'"
+            ],
             "warning_file_open_time": 86400
         }
     ]

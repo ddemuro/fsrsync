@@ -26,7 +26,21 @@ def read_linux_user_default_ssh_key():
 
 
 def run_ssh_command(command, host, username="root", ssh_key=None, logger=None):
-    """Run a command on the remote server"""
+    """Run a command on a remote server using SSH
+
+    :param command: The command to run
+    :type command: str
+    :param host: The host to connect to
+    :type host: str
+    :param username: The username to use for the connection, defaults to "root"
+    :type username: str, optional
+    :param ssh_key: The SSH key to use for the connection, defaults to None
+    :type ssh_key: str, optional
+    :param logger: The logger to use for logging, defaults to None
+    :type logger: logging.Logger, optional
+    :return: The output of the command
+    :rtype: str
+    """
     try:
         if not host or not command:
             log_output("Host and command are required", logger)
@@ -50,11 +64,9 @@ def run_ssh_command(command, host, username="root", ssh_key=None, logger=None):
         stdin, stdout, stderr = ssh.exec_command(command, timeout=1000)
         output = stdout.read().decode('utf-8')
         stderr = stderr.read().decode('utf-8')
-
-        if output:
-            return output
-        else:
-            if stderr:
-                return stderr
+        # Get the exit status from the channel
+        if stdout.channel.recv_exit_status():
+            return True, stdout.channel.recv_exit_status(), output, stderr
+        return False, stdout.channel.recv_exit_status(), output, stderr
     except Exception as e:  # pylint: disable=broad-except
         log_output(f"Error running ssh command: {e}", logger)

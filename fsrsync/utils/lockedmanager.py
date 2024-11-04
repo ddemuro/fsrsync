@@ -3,6 +3,7 @@ import time
 import threading
 from .wrappers import singleton
 from .utils import is_file_open
+from .constants import WAIT_5_SEC
 
 
 class LockedFile:
@@ -74,7 +75,7 @@ class PendingLocked:
             if is_file_open(f"{file.path}") and not exceeded_wait:
                 continue
             if file not in self.exceeded_wait and exceeded_wait:
-                self.logger.info(f"File {file.path} has exceeded max wait time")
+                self.logger.debug(f"File {file.path} has exceeded max wait time")
                 self.add_exceeded_wait(file)
                 self.remove_locked_file(file)
 
@@ -83,7 +84,7 @@ class PendingLocked:
         while True:
             self.check_locked_files()
             # Sleep 5 seconds before checking again
-            time.sleep(5)
+            time.sleep(WAIT_5_SEC)
 
     def is_file_in_exceeded_wait(self, path):
         """Check if a file is in the exceeded wait list"""

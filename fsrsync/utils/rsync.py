@@ -17,7 +17,11 @@ class RsyncManager:
         pre_sync_commands_local=None,
         post_sync_commands_local=None,
         pre_sync_commands_remote=None,
-        post_sync_commands_remote=None
+        post_sync_commands_remote=None,
+        pre_sync_commands_checkexit_local=None,
+        post_sync_commands_checkexit_local=None,
+        pre_sync_commands_checkexit_remote=None,
+        post_sync_commands_checkexit_remote=None,
     ):
         """Initialize the rsync manager with destination and options"""
         self.destination = destination
@@ -30,6 +34,10 @@ class RsyncManager:
         self.post_sync_commands_local = post_sync_commands_local or []
         self.pre_sync_commands_remote = pre_sync_commands_remote or []
         self.post_sync_commands_remote = post_sync_commands_remote or []
+        self.pre_sync_commands_checkexit_local = pre_sync_commands_checkexit_local or []
+        self.post_sync_commands_checkexit_local = post_sync_commands_checkexit_local or []
+        self.pre_sync_commands_checkexit_remote = pre_sync_commands_checkexit_remote or []
+        self.post_sync_commands_checkexit_remote = post_sync_commands_checkexit_remote or []
         self.logger = Logger()
 
     def add_path(self, path):
@@ -51,11 +59,7 @@ class RsyncManager:
 
     def format_option(self, options):
         """Return a formatted string of options"""
-        return (
-            "'{"
-            + ", ".join(f"'{option}'" for option in options)
-            + "}'"
-        )
+        return "'{" + ", ".join(f"'{option}'" for option in options) + "}'"
 
     def run(self, exclude_list=None, include_list=None):
         """Run rsync with the specified options, paths, and destination"""
@@ -70,7 +74,7 @@ class RsyncManager:
 
         # Don't run if include list is empty
         if include_list and len(include_list) == 0:
-            self.logger.info("Include list is empty, skipping rsync.")
+            self.logger.debug("Include list is empty, skipping rsync.")
             return
 
         # Run pre-sync commands
@@ -81,16 +85,52 @@ class RsyncManager:
                     continue
                 run_command(command)
 
+        # Run pre-sync checkexit commands
+        if len(self.pre_sync_commands_checkexit_local) > 0:
+            print("Running pre-sync checkexit commands...")
+            for command in self.pre_sync_commands_checkexit_local:
+                if not command:
+                    continue
+                success, exit_code, stdout, stderr = run_command(command)
+                if not success:
+                    self.logger.error(
+                        f"Pre-sync checkexit command failed with exit code {exit_code}: {stdout} {stderr}"
+                    )
+                    return False, False
+
+        # Run pre-sync remote commands
         if len(self.pre_sync_commands_remote) > 0:
             print("Running pre-sync commands...")
             for command in self.pre_sync_commands_remote:
                 if not command:
                     continue
-                run_ssh_command(command,
-                                self.destination.split("@")[1],
-                                self.destination.split("@")[0],
-                                self.ssh_key,
-                                logger=self.logger)
+                run_ssh_command(
+                    command,
+                    self.destination.split("@")[1],
+                    self.destination.split("@")[0],
+                    self.ssh_key,
+                    logger=self.logger,
+                )
+
+        # Run pre-sync remote checkexit commands
+        if len(self.pre_sync_commands_checkexit_remote) > 0:
+            print("Running pre-sync checkexit commands...")
+            for command in self.pre_sync_commands_checkexit_remote:
+                if not command:
+                    continue
+                success, exit_code, stdout, stderr = run_ssh_command(
+                    command,
+                    self.destination.split("@")[1],
+                    self.destination.split("@")[0],
+                    self.ssh_key,
+                    logger=self.logger,
+                )
+                # If the command fails, log the error and return
+                if not success:
+                    self.logger.error(
+                        f"Pre-sync checkexit command failed with exit code {exit_code}: {stdout} {stderr}"
+                    )
+                    return False, False
 
         # Construct paths string
         paths_str = " ".join(self.paths_to_monitor)
@@ -114,14 +154,20 @@ class RsyncManager:
         # Construct rsync command
         # If include_list is provided, use it to sync only the specified files
         if include_list:
-            rsync_command = f"rsync {options} --stats {self.destination}:{self.destination_path}"
-            self.logger.info(f"Only syncing files in include list: {include_list}, rsync command: {rsync_command}")
+            rsync_command = (
+                f"rsync {options} --stats {self.destination}:{self.destination_path}"
+            )
+            self.logger.info(
+                f"Only syncing files in include list: {include_list}, rsync command: {rsync_command}"
+            )
         else:
             rsync_command = f"rsync {options} {paths_str} {self.destination}:{self.destination_path}"
             self.logger.info(f"Running regular rsync command: {rsync_command}")
-        rsync_log = run_command(rsync_command)
-        if rsync_log:
-            self.logger.info(f"Rsync return code: {rsync_log.returncode}, stdout: {rsync_log.stdout}, stderr: {rsync_log.stderr}")
+        rsync_success, exit_code, stdout, stderr = run_command(rsync_command)
+        if stdout:
+            self.logger.info(
+                f"Rsync return code: {exit_code}, stdout: {stdout}, stderr: {stderr}"
+            )
 
         # Run post-sync commands
         if len(self.post_sync_commands_local) > 0:
@@ -130,13 +176,53 @@ class RsyncManager:
                 if not command:
                     continue
                 run_command(command)
+
+        # Run post-sync checkexit commands
+        if len(self.post_sync_commands_checkexit_local) > 0:
+            print("Running post-sync checkexit commands...")
+            for command in self.post_sync_commands_checkexit_local:
+                if not command:
+                    continue
+                success, exit_code, stdout, stderr = run_command(command)
+                if not success:
+                    self.logger.error(
+                        f"Post-sync checkexit command failed with exit code {exit_code}: {stdout} {stderr}"
+                    )
+                    return rsync_success, False
+
+        # Run post-sync checkexit commands
         if len(self.post_sync_commands_remote) > 0:
             print("Running post-sync commands...")
             for command in self.post_sync_commands_remote:
                 if not command:
                     continue
-                run_ssh_command(command,
-                                self.destination.split("@")[1],
-                                self.destination.split("@")[0],
-                                self.ssh_key,
-                                logger=self.logger)
+                run_ssh_command(
+                    command,
+                    self.destination.split("@")[1],
+                    self.destination.split("@")[0],
+                    self.ssh_key,
+                    logger=self.logger,
+                )
+        
+        # Run post-sync checkexit remote commands
+        if len(self.post_sync_commands_checkexit_remote) > 0:
+            print("Running post-sync checkexit commands...")
+            for command in self.post_sync_commands_checkexit_remote:
+                if not command:
+                    continue
+                success, exit_code, stdout, stderr = run_ssh_command(
+                    command,
+                    self.destination.split("@")[1],
+                    self.destination.split("@")[0],
+                    self.ssh_key,
+                    logger=self.logger,
+                )
+                # If the command fails, log the error and return
+                if not success:
+                    self.logger.error(
+                        f"Post-sync checkexit command failed with exit code {exit_code}: {stdout} {stderr}"
+                    )
+                    return rsync_success, False
+
+        # Return the success status of the rsync command
+        return rsync_success, True
