@@ -16,7 +16,14 @@
             ],
             "warning_file_open_time": 86400,
             "control_server_port": 8080,
-            "control_server_host": "0.0.0.0"
+            "control_server_host": "0.0.0.0",
+            "extensions_to_ignore": [
+                ".swp",
+                ".swx",
+                ".swpx",
+                ".tmp",
+                ".temp"
+            ]
         },
         {
             "destination": "user2@remote:/path/to/destination2",

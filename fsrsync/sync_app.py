@@ -160,6 +160,7 @@ class SyncApplication:
             "event_count": 0,
             "path": path,
             "locked_on_sync": False,
+            "extensions_to_ignore": dest_config.get("extensions_to_ignore", []),
             "control_server_secret": dest_config.get("control_server_secret", None),
             "notify_file_locks": dest_config.get("notify_file_locks", False),
             "use_global_server_lock": dest_config.get("use_global_server_lock", False),
@@ -210,6 +211,12 @@ class SyncApplication:
         self, destination, immediate_sync_files_for_path
     ):
         """Check if we have immedeate sync files for a destination"""
+        # Grab extensions to ignore
+        extensions_to_ignore = destination.get("extensions_to_ignore", [])
+        # Remove files with extensions to ignore
+        for file in immediate_sync_files_for_path:
+            if file.path.split(".")[-1] in extensions_to_ignore:
+                self.fs_monitor.delete_immediate_sync_file(file)
         # Check if we have immedeate sync files
         files_to_sync_paths = [file.path for file in immediate_sync_files_for_path]
         if immediate_sync_files_for_path:
@@ -258,8 +265,16 @@ class SyncApplication:
             self.logger.debug(
                 f"Event queue limit reached for destination {destination['rsync_manager'].destination}. Running rsync..."
             )
+            # Check if we should exclude files by extension
+            extensions_to_ignore = destination.get("extensions_to_ignore", [])
+            filtered_events = []
+            for event in events:
+                if event.path.split(".")[-1] in extensions_to_ignore:
+                    self.fs_monitor.delete_regular_sync_file(event.path)
+                else:
+                    filtered_events.append(event)
             # Add files in events to the include list
-            include = [event.path for event in events]
+            include = [event.path for event in filtered_events]
             # Should exclude
             exclude = None
             if not should_exclude:
