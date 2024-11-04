@@ -12,6 +12,7 @@
             "options": "-az --no-whole-file --delete --inplace",
             "event_queue_limit": 10,
             "path": "/path/to/directory1",
+            "full_sync_interval": 30,
             "events": [
                 "IN_CREATE",
                 "IN_MODIFY"
@@ -37,6 +38,7 @@
             "control_server_port": 8081,
             "control_server_host": "0.0.0.0",
             "path": "/path/to/directory3",
+            "full_sync_interval": 30,
             "events": [
                 "IN_MODIFY",
                 "IN_DELETE"

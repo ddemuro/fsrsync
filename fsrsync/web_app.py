@@ -30,8 +30,7 @@ class WebControl:
             self.logger = logger or print  # Use `print` as a fallback logger
             self.initialized = True  # Flag to indicate initialization
             if logger:
-                self.logger.info(f"Web control initialized. Host: {
-                                 host}, Port: {port}")
+                self.logger.info(f"Web control initialized. Host: {host}, Port: {port}")
 
     def check_if_secret_in_header(self, headers):
         """Check if secret is in the header"""

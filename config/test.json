@@ -18,6 +18,7 @@
             "control_server_secret": "secret",
             "control_server_port": 8080,
             "path": "/root/source",
+            "full_sync_interval": 30,
             "events": [
                 "IN_MODIFY",
                 "IN_DELETE",

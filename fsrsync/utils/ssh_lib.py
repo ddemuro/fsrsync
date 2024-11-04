@@ -85,8 +85,7 @@ def run_ssh_command(command, host, username="root", ssh_key=None, logger=None):
         output = stdout.read().decode('utf-8')
         err = stderr.read().decode('utf-8')
         exit_code = stdout.channel.recv_exit_status()
-        log_output(f"Running command: {command}, stdout: {
-                   output}, stderr: {err}, exit_code: {exit_code}", logger)
+        log_output(f"Running command: {command}, stdout: {output}, stderr: {err}, exit_code: {exit_code}", logger)
         ssh.close()
         return False, exit_code, output, stderr
     except Exception as e:  # pylint: disable=broad-except

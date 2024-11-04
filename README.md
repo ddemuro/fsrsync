@@ -97,6 +97,8 @@ Each entry in the `destinations` array represents a configuration for a specific
 
 - **`destination_path`**: The path on the remote system where data will be transferred.
 
+- **`full_sync_interval`**: The interval (in minutes) at which a full sync should be performed. A full sync transfers all files from the source to the destination.
+
 - **`options`**: Additional options for the `rsync` command (e.g., `-avPrl --delete`). These specify flags such as archive mode (`-a`), verbose output (`-v`), preserving permissions (`-P`), and deleting extra files on the destination (`--delete`).
 
 - **`ssh_port`**: The port used for SSH connections to the remote destination. Default is usually `22`.

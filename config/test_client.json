@@ -4,5 +4,6 @@
     "control_server_port": 8080,
     "control_server_host": "0.0.0.0",
     "control_server_secret": "secret",
+    "full_sync_interval": 30,
     "destinations": []
 }

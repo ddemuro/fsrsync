@@ -1,7 +1,7 @@
 """Library to make GET and POST requests to the web server."""
 import requests
 from requests.exceptions import ConnectionError, RequestException
-
+from .constants import DEFAULT_HTTP_TIMEOUT
 
 class WebClient:
     """Library to make GET and POST requests to the web server."""
@@ -22,7 +22,8 @@ class WebClient:
         """Make a GET request to the web server"""
         url = f"http://{self.host}:{self.port}{path}"
         try:
-            response = requests.get(url, headers={"secret": self.secret})
+            response = requests.get(url, headers={"secret": self.secret},
+                                    timeout=DEFAULT_HTTP_TIMEOUT)
             response.raise_for_status()
             self.log(f"GET request to {url}, response: {response.json()}")
             return response.json()
@@ -37,11 +38,10 @@ class WebClient:
         """Make a POST request to the web server"""
         url = f"http://{self.host}:{self.port}{path}"
         try:
-            response = requests.post(
-                url, headers={"secret": self.secret}, json=data)
+            response = requests.post(url, headers={"secret": self.secret},
+                                     json=data, timeout=DEFAULT_HTTP_TIMEOUT)
             response.raise_for_status()
-            self.log(f"POST request to {url} with data {
-                     data}, response: {response.json()}")
+            self.log(f"POST request to {url} with data {data}, response: {response.json()}")
             return response.json()
         except ConnectionError:
             return {"status": "error", "message": "Connection error"}

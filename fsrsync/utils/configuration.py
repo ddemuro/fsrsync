@@ -28,8 +28,7 @@ class ConfigurationManager:
                 self.config = json.load(file)
                 self.logger.debug("Loaded configuration...")
         except FileNotFoundError:
-            self.logger.error(f"Configuration file not found: {
-                              self.config_file}")
+            self.logger.error(f"Configuration file not found: {self.config_file}")
             self.logger.error(
                 "Have you created a configuration file? See README.md")
             self.logger.error("Exiting...")
