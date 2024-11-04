@@ -103,14 +103,29 @@ class FilesystemMonitor:
             self.add_to_locked_files(File(full_path, self.logger))
             return
 
-        if event_mask & EVENT_MAP["IN_CLOSE_WRITE"]:
+        # File closed
+        FILE_CLOSED_EVENTS = ["IN_CLOSE_WRITE", "IN_CLOSE_NOWRITE"]
+        if any(event_mask & EVENT_MAP[event] for event in FILE_CLOSED_EVENTS):
             if full_path in self.open_files:
                 self.logger.debug(f"File closed: {full_path}")
                 self.delete_locked_file(full_path)
                 self.add_immediate_sync_file(File(full_path, self.logger))
                 return
 
-        if event_mask & (EVENT_MAP["IN_MODIFY"] | EVENT_MAP["IN_DELETE"]):
+        # All other events
+        ALL_OTHER_EVENTS = [
+            "IN_ACCESS",
+            "IN_MODIFY",
+            "IN_DELETE",
+            "IN_MOVED_FROM",
+            "IN_MOVED_TO",
+            "IN_MOVE_SELF",
+            "IN_DELETE_SELF",
+            "IN_ATTRIB",
+            "IN_CLOSE_NOWRITE",
+        ]
+        if any(event_mask & EVENT_MAP[event] for event in ALL_OTHER_EVENTS):
+            self.logger.debug(f"File modified: {full_path}")
             self.add_regular_sync_file(File(full_path, self.logger))
 
     def log_files_opened_for_too_long(self):
