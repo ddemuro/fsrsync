@@ -28,14 +28,17 @@ class ConfigurationManager:
                 self.config = json.load(file)
                 self.logger.debug("Loaded configuration...")
         except FileNotFoundError:
-            self.logger.error(f"Configuration file not found: {self.config_file}")
-            self.logger.error("Have you created a configuration file? See README.md")
+            self.logger.error(f"Configuration file not found: {
+                              self.config_file}")
+            self.logger.error(
+                "Have you created a configuration file? See README.md")
             self.logger.error("Exiting...")
             # Exit the program if the configuration file is not found
             sys.exit(1)
         except json.JSONDecodeError as e:
             self.logger.error(f"Error loading configuration: {e}")
-            self.logger.error("Have you created a configuration file? See README.md")
+            self.logger.error(
+                "Have you created a configuration file? See README.md")
             self.logger.error("Exiting...")
             # Exit the program if there is an error loading the configuration file
             sys.exit(2)

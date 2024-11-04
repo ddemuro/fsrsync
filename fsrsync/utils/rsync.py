@@ -94,7 +94,8 @@ class RsyncManager:
                 success, exit_code, stdout, stderr = run_command(command)
                 if not success:
                     self.logger.error(
-                        f"Pre-sync checkexit command failed with exit code {exit_code}: {stdout} {stderr}"
+                        f"Pre-sync checkexit command failed with exit code {
+                            exit_code}: {stdout} {stderr}"
                     )
                     return False, False
 
@@ -128,7 +129,8 @@ class RsyncManager:
                 # If the command fails, log the error and return
                 if not success:
                     self.logger.error(
-                        f"Pre-sync checkexit command failed with exit code {exit_code}: {stdout} {stderr}"
+                        f"Pre-sync checkexit command failed with exit code {
+                            exit_code}: {stdout} {stderr}"
                     )
                     return False, False
 
@@ -155,18 +157,22 @@ class RsyncManager:
         # If include_list is provided, use it to sync only the specified files
         if include_list:
             rsync_command = (
-                f"rsync {options} --stats {self.destination}:{self.destination_path}"
+                f"rsync {
+                    options} --stats {self.destination}:{self.destination_path}"
             )
             self.logger.info(
-                f"Only syncing files in include list: {include_list}, rsync command: {rsync_command}"
+                f"Only syncing files in include list: {
+                    include_list}, rsync command: {rsync_command}"
             )
         else:
-            rsync_command = f"rsync {options} {paths_str} {self.destination}:{self.destination_path}"
+            rsync_command = f"rsync {options} {paths_str} {
+                self.destination}:{self.destination_path}"
             self.logger.info(f"Running regular rsync command: {rsync_command}")
         rsync_success, exit_code, stdout, stderr = run_command(rsync_command)
         if stdout:
             self.logger.info(
-                f"Rsync return code: {exit_code}, stdout: {stdout}, stderr: {stderr}"
+                f"Rsync return code: {exit_code}, stdout: {
+                    stdout}, stderr: {stderr}"
             )
 
         # Run post-sync commands
@@ -186,7 +192,8 @@ class RsyncManager:
                 success, exit_code, stdout, stderr = run_command(command)
                 if not success:
                     self.logger.error(
-                        f"Post-sync checkexit command failed with exit code {exit_code}: {stdout} {stderr}"
+                        f"Post-sync checkexit command failed with exit code {
+                            exit_code}: {stdout} {stderr}"
                     )
                     return rsync_success, False
 
@@ -203,7 +210,7 @@ class RsyncManager:
                     self.ssh_key,
                     logger=self.logger,
                 )
-        
+
         # Run post-sync checkexit remote commands
         if len(self.post_sync_commands_checkexit_remote) > 0:
             print("Running post-sync checkexit commands...")
@@ -220,7 +227,8 @@ class RsyncManager:
                 # If the command fails, log the error and return
                 if not success:
                     self.logger.error(
-                        f"Post-sync checkexit command failed with exit code {exit_code}: {stdout} {stderr}"
+                        f"Post-sync checkexit command failed with exit code {
+                            exit_code}: {stdout} {stderr}"
                     )
                     return rsync_success, False
 

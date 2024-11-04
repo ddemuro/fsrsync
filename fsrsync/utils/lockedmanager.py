@@ -44,11 +44,13 @@ class PendingLocked:
 
     def add_locked_file(self, path, max_wait_locked):
         """Add a locked file to the list"""
-        self.locked_files.append(LockedFile(path, max_wait_locked, self.logger))
+        self.locked_files.append(LockedFile(
+            path, max_wait_locked, self.logger))
 
     def remove_locked_file(self, path):
         """Remove a locked file from the list"""
-        self.locked_files = [file for file in self.locked_files if file.path != path]
+        self.locked_files = [
+            file for file in self.locked_files if file.path != path]
 
     def has_locked_files(self):
         """Check if there are locked files"""
@@ -62,7 +64,8 @@ class PendingLocked:
                 if locked_file.path == file:
                     self.exceeded_wait.append(locked_file)
         # Remove the LockedFile object from the list of locked files
-        self.locked_files = [locked_file for locked_file in self.locked_files if locked_file.path != file]
+        self.locked_files = [
+            locked_file for locked_file in self.locked_files if locked_file.path != file]
 
     def has_exceeded_wait(self):
         """Check if there are files that have exceeded the max wait time"""
@@ -71,11 +74,13 @@ class PendingLocked:
     def check_locked_files(self):
         """Check if any locked files have exceeded the max wait time"""
         for file in self.locked_files:
-            exceeded_wait = time.time() - os.path.getmtime(f"{file.path}") > file.max_wait_locked
+            exceeded_wait = time.time() - \
+                os.path.getmtime(f"{file.path}") > file.max_wait_locked
             if is_file_open(f"{file.path}") and not exceeded_wait:
                 continue
             if file not in self.exceeded_wait and exceeded_wait:
-                self.logger.debug(f"File {file.path} has exceeded max wait time")
+                self.logger.debug(
+                    f"File {file.path} has exceeded max wait time")
                 self.add_exceeded_wait(file)
                 self.remove_locked_file(file)
 

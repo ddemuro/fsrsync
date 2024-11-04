@@ -1,17 +1,18 @@
+from fsrsync.sync_app import SyncApplication
 import os
 import sys
 import json
 import argparse
 # Fix path so that we can import the sync_app module
 sys.path.append('..')
-from fsrsync.sync_app import SyncApplication
 
 DEFAULT_CONFIG_FILE = "/etc/fsrsync/config.json"
 
 
 def main():
     """Main function for the application"""
-    parser = argparse.ArgumentParser(description="FSRsync: Filesystem to Rsync")
+    parser = argparse.ArgumentParser(
+        description="FSRsync: Filesystem to Rsync")
     # Add arguments
     parser.add_argument(
         "--config_file", nargs="?", default=DEFAULT_CONFIG_FILE,

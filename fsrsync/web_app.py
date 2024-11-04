@@ -30,7 +30,8 @@ class WebControl:
             self.logger = logger or print  # Use `print` as a fallback logger
             self.initialized = True  # Flag to indicate initialization
             if logger:
-                self.logger.info(f"Web control initialized. Host: {host}, Port: {port}")
+                self.logger.info(f"Web control initialized. Host: {
+                                 host}, Port: {port}")
 
     def check_if_secret_in_header(self, headers):
         """Check if secret is in the header"""
@@ -39,7 +40,8 @@ class WebControl:
     @app.get("/")
     async def list_routes():  # pylint: disable=no-self-argument, no-method-argument
         """List the routes"""
-        routes = [{"path": route.path, "methods": route.methods, "name": route.name} for route in WebControl.app.routes]
+        routes = [{"path": route.path, "methods": route.methods,
+                   "name": route.name} for route in WebControl.app.routes]
         return {"routes": routes}
 
     @app.get("/regular_pending")
@@ -94,14 +96,14 @@ class WebControl:
     async def dashboard(request: Request):  # pylint: disable=no-self-argument
         instance = WebControl._instance
         secret = request.query_params.get("secret")
-        
+
         if not secret or secret != instance.secret:
             # If secret is not provided or invalid, return template with `secret_provided` set to `False`
             return instance.templates.TemplateResponse("dashboard.html", {
                 "request": request,
                 "secret_provided": False
             })
-        
+
         result = []
         for destination in instance.sync_state.destinations:
             result.append({
@@ -116,6 +118,22 @@ class WebControl:
             "secret_provided": True,
             "secret": secret
         })
+
+    @app.get("/stats")
+    async def stats(request: Request):  # pylint: disable=no-self-argument
+        instance = WebControl._instance
+        secret = request.query_params.get("secret")
+
+        if not secret or secret != instance.secret:
+            # If secret is not provided or invalid, return json with error
+            return {"error": "Unauthorized, secret in query string not provided or invalid. example: /stats?secret=your_secret_here"}
+
+        result = []
+        for destination in instance.sync_state.destinations:
+            result.append({
+                "destination": destination.get("path", ""),
+                "statistics": destination.get("statistics", {}),
+            })
 
     def run(self):
         """Run the web application"""

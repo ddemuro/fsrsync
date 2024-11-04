@@ -37,9 +37,11 @@ class WebClient:
         """Make a POST request to the web server"""
         url = f"http://{self.host}:{self.port}{path}"
         try:
-            response = requests.post(url, headers={"secret": self.secret}, json=data)
+            response = requests.post(
+                url, headers={"secret": self.secret}, json=data)
             response.raise_for_status()
-            self.log(f"POST request to {url} with data {data}, response: {response.json()}")
+            self.log(f"POST request to {url} with data {
+                     data}, response: {response.json()}")
             return response.json()
         except ConnectionError:
             return {"status": "error", "message": "Connection error"}

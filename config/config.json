@@ -4,6 +4,7 @@
     "control_server_port": 8080,
     "control_server_host": "0.0.0.0",
     "control_server_secret": "secret",
+    "max_stats": 10,
     "destinations": [
         {
             "destination": "user1@remote",

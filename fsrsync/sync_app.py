@@ -11,7 +11,7 @@ from .utils.utils import validate_path
 from .utils.filesystem import FilesystemMonitor
 from .utils.configuration import ConfigurationManager
 from .utils.web_client import WebClient
-from .utils.constants import WAIT_1H, WAIT_30_SEC
+from .utils.constants import WAIT_1H, WAIT_30_SEC, ZERO, DEFAULT_MAX_STATS, EXCLUDE_ALL
 
 
 class SyncApplication:
@@ -37,6 +37,9 @@ class SyncApplication:
             self.config_manager.get_instance(config_file).config.get(
                 "SENTRY_DSN", None
             ),
+        )
+        self.max_stats = self.config_manager.get_instance(config_file).config.get(
+            "max_stats", DEFAULT_MAX_STATS
         )
         self.full_sync = full_sync  # Full sync flag
         self.web_control = None
@@ -76,14 +79,16 @@ class SyncApplication:
         for dest_config in destinations:
             if not dest_config.get("enabled", True):
                 self.logger.debug(
-                    f"Destination {dest_config['destination']} is disabled. Skipping..."
+                    f"Destination {
+                        dest_config['destination']} is disabled. Skipping..."
                 )
                 continue
             # Check if the destination path is already in self.destinations
             for destination in self.destinations:
                 if destination.get("path") == dest_config.get("path"):
                     self.logger.error(
-                        f"Destination path {dest_config.get('path')} already exists in another destination. Skipping..."
+                        f"Destination path {dest_config.get(
+                            'path')} already exists in another destination. Skipping..."
                     )
                     continue
             self.setup_destination(dest_config)
@@ -93,7 +98,8 @@ class SyncApplication:
             self.logger.debug("Full sync enabled. Syncing all files...")
             for destination in self.destinations:
                 self.logger.debug(
-                    f"Running full sync for destination: {destination['rsync_manager'].destination}"
+                    f"Running full sync for destination: {
+                        destination['rsync_manager'].destination}"
                 )
                 destination["rsync_manager"].run()
             sys.exit(0)
@@ -107,18 +113,21 @@ class SyncApplication:
             pending_immediate = len(self.fs_monitor.get_immediate_sync_files())
             pending_regular = len(self.fs_monitor.get_regular_sync_files())
             self.logger.debug(
-                f"Pending immediate sync files:  {pending_immediate}, pending regular sync files: {pending_regular}"
+                f"Pending immediate sync files:  {
+                    pending_immediate}, pending regular sync files: {pending_regular}"
             )
 
             # Update event counts and check queue limits for each destination
             if pending_immediate > 0 or pending_regular > 0:
-                self.logger.debug("Checking event queue limits for destinations...")
+                self.logger.debug(
+                    "Checking event queue limits for destinations...")
                 for destination in self.destinations:
                     # Call self.manage_destination_event(destination) in a separate thread
                     # Check if destination is locked, don't run if it is
                     if not destination.get("locked_on_sync"):
                         thread = threading.Thread(
-                            target=self.manage_destination_event, args=(destination,)
+                            target=self.manage_destination_event, args=(
+                                destination,)
                         )
                         thread.start()
 
@@ -134,7 +143,8 @@ class SyncApplication:
         # Validate remote server format
         if "@" not in dest_config.get("destination", ""):
             self.logger.error(
-                f"Invalid destination format: {dest_config.get('destination')}, skipping destination..."
+                f"Invalid destination format: {dest_config.get(
+                    'destination')}, skipping destination..."
             )
             return
 
@@ -145,10 +155,14 @@ class SyncApplication:
             ssh_user=dest_config.get("ssh_user", "root"),
             ssh_key=dest_config.get("ssh_key", None),
             ssh_port=dest_config.get("ssh_port", 22),
-            pre_sync_commands_local=dest_config.get("pre_sync_commands_local", []),
-            post_sync_commands_local=dest_config.get("post_sync_commands_local", []),
-            pre_sync_commands_remote=dest_config.get("pre_sync_commands_remote", []),
-            post_sync_commands_remote=dest_config.get("post_sync_commands_remote", []),
+            pre_sync_commands_local=dest_config.get(
+                "pre_sync_commands_local", []),
+            post_sync_commands_local=dest_config.get(
+                "post_sync_commands_local", []),
+            pre_sync_commands_remote=dest_config.get(
+                "pre_sync_commands_remote", []),
+            post_sync_commands_remote=dest_config.get(
+                "post_sync_commands_remote", []),
             pre_sync_commands_checkexit_local=dest_config.get(
                 "pre_sync_commands_checkexit_local", []
             ),
@@ -184,7 +198,8 @@ class SyncApplication:
 
         # Set filesystem warning time
         self.logger.debug(
-            f"Setting warning file open time for {path} to {dest_config.get('warning_file_open_time', 86400)}"
+            f"Setting warning file open time for {path} to {
+                dest_config.get('warning_file_open_time', 86400)}"
         )
         self.fs_monitor.warning_file_open_time = dest_config.get(
             "warning_file_open_time", 86400
@@ -212,7 +227,8 @@ class SyncApplication:
         hostname = self.config_manager.get_hostname()
         if hostname != os.uname().nodename:
             self.logger.error(
-                f"Hostname mismatch: {hostname} in configuration file does not match {os.uname().nodename}"
+                f"Hostname mismatch: {hostname} in configuration file does not match {
+                    os.uname().nodename}"
             )
             sys.exit(1)
 
@@ -226,7 +242,8 @@ class SyncApplication:
         filtered_files = []
         for file in immediate_sync_files_for_path:
             if file.path.split(".")[-1] in extensions_to_ignore:
-                self.logger.debug(f"Removing file {file.path} from immediate sync")
+                self.logger.debug(
+                    f"Removing file {file.path} from immediate sync")
                 self.fs_monitor.delete_immediate_sync_file(file)
             else:
                 self.logger.debug(f"Adding file {file.path} to immediate sync")
@@ -235,36 +252,45 @@ class SyncApplication:
         files_to_sync_paths = [file.path for file in filtered_files]
         if immediate_sync_files_for_path:
             # Only sync the immediate sync files
+            time_sync_start = time.time()
             include = "{'" + "','".join(files_to_sync_paths) + "'}"
             self.logger.info(
-                f"Immediate sync files detected for destination {destination['rsync_manager'].destination}. Running rsync..."
+                f"Immediate sync files detected for destination {
+                    destination['rsync_manager'].destination}. Running rsync..."
             )
             rsync_result, process_result = destination["rsync_manager"].run(
-                include_list=include
+                exclude=EXCLUDE_ALL, include_list=include
             )
             if rsync_result:
                 self.logger.info(
-                    f"Rsync completed successfully for destination {destination['rsync_manager'].destination}"
+                    f"Rsync completed successfully for destination {
+                        destination['rsync_manager'].destination}"
                 )
             else:
                 self.logger.error(
-                    f"Rsync failed for destination {destination['rsync_manager'].destination}, not clearing pending files..."
+                    f"Rsync failed for destination {
+                        destination['rsync_manager'].destination}, not clearing pending files..."
                 )
                 self.statistics_generator(
                     destination,
-                    self.fs_monitor.get_regular_sync_files(destination.get("path")),
-                    self.fs_monitor.get_immediate_sync_files(destination.get("path")),
+                    self.fs_monitor.get_regular_sync_files(
+                        destination.get("path")),
+                    self.fs_monitor.get_immediate_sync_files(
+                        destination.get("path")),
                     sync_result=rsync_result,
                     log_type="immediate",
                 )
                 return
             # Remove these files from the immediate sync list
             for file in self.fs_monitor.get_immediate_sync_files():
-                self.fs_monitor.delete_immediate_sync_file(file)
+                self.fs_monitor.delete_immediate_sync_file(
+                    file, time_sync_start)
             self.statistics_generator(
                 destination,
-                self.fs_monitor.get_regular_sync_files(destination.get("path")),
-                self.fs_monitor.get_immediate_sync_files(destination.get("path")),
+                self.fs_monitor.get_regular_sync_files(
+                    destination.get("path")),
+                self.fs_monitor.get_immediate_sync_files(
+                    destination.get("path")),
                 sync_result=rsync_result,
                 log_type="regular",
             )
@@ -272,28 +298,26 @@ class SyncApplication:
     def process_regular_sync(self, destination, events):
         """Process regular sync for a destination"""
         # Trigger rsync when event count reaches the limit
+        time_sync_start = time.time()
         if len(events) >= destination["event_queue_limit"]:
             # Get locked files in the path that have exceeded the max wait time
-            should_exclude = self.fs_monitor.check_if_locked_files_exceeded_wait(
+            should_exclude = self.fs_monitor.clear_locks_exceeded_wait(
                 destination.get("path"), destination["max_wait_locked"]
             )
+            should_exclude_paths = [file.path for file in should_exclude]
             # Delay rsync if there are open files
             self.logger.debug(
-                f"Event queue limit reached for destination {destination['rsync_manager'].destination}. Running rsync..."
+                f"Event queue limit reached for destination {
+                    destination['rsync_manager'].destination}. Running rsync..."
             )
 
             # Add files in events to the include list
             include = [event.path for event in events]
-            # Should exclude
-            exclude = None
-            if not should_exclude:
-                # Create a list in the format of --exclude={'/path/to/file1','/path/to/file2'}
-                exclude = [
-                    file.path
-                    for file in self.fs_monitor.get_locked_files_for_path(
-                        destination.get("path")
-                    )
-                ]
+            # Include all events except for the ones that are locked
+            files_to_sync = []
+            for file in events:
+                if file.path not in should_exclude_paths:
+                    files_to_sync.append(file.path)
 
             # Check if we should notify of remote locks
             webc = destination.get("web_client", None)
@@ -303,27 +327,32 @@ class SyncApplication:
                     webc.add_file_to_locked_files(include)
 
             rsync_result, app_code_result = destination["rsync_manager"].run(
-                exclude_list=exclude, include_list=include
+                exclude_list=EXCLUDE_ALL, include_list=include
             )
             if rsync_result:
                 self.logger.info(
-                    f"Rsync completed successfully for destination {destination['rsync_manager'].destination}"
+                    f"Rsync completed successfully for destination {
+                        destination['rsync_manager'].destination}"
                 )
             else:
                 self.logger.error(
-                    f"Rsync failed for destination {destination['rsync_manager'].destination}, not clearing pending files..."
+                    f"Rsync failed for destination {
+                        destination['rsync_manager'].destination}, not clearing pending files..."
                 )
                 self.statistics_generator(
                     destination,
-                    self.fs_monitor.get_regular_sync_files(destination.get("path")),
-                    self.fs_monitor.get_immediate_sync_files(destination.get("path")),
+                    self.fs_monitor.get_regular_sync_files(
+                        destination.get("path")),
+                    self.fs_monitor.get_immediate_sync_files(
+                        destination.get("path")),
                     sync_result=rsync_result,
                     log_type="regular",
                 )
                 return
             # Remove these files from the regular sync list
             for file in events:
-                self.fs_monitor.delete_regular_sync_file(file.path)
+                self.fs_monitor.delete_regular_sync_file(
+                    file.path, time_sync_start)
 
             # Clear locked files
             if destination.get("notify_file_locks", False):
@@ -331,8 +360,10 @@ class SyncApplication:
                     webc.remove_locked_files(include)
             self.statistics_generator(
                 destination,
-                self.fs_monitor.get_regular_sync_files(destination.get("path")),
-                self.fs_monitor.get_immediate_sync_files(destination.get("path")),
+                self.fs_monitor.get_regular_sync_files(
+                    destination.get("path")),
+                self.fs_monitor.get_immediate_sync_files(
+                    destination.get("path")),
                 sync_result=rsync_result,
                 log_type="regular",
             )
@@ -345,7 +376,8 @@ class SyncApplication:
             return
         if destination.get("locked_on_sync"):
             self.logger.debug(
-                f"Destination {destination['rsync_manager'].destination} is locked. Sleeping 30 seconds until lock is clear..."
+                f"Destination {
+                    destination['rsync_manager'].destination} is locked. Sleeping 30 seconds until lock is clear..."
             )
             time.sleep(WAIT_30_SEC)
             return
@@ -357,13 +389,15 @@ class SyncApplication:
             in self.global_server_locks
         ):
             self.logger.debug(
-                f"Destination {destination['rsync_manager'].destination} is locked. Waiting..."
+                f"Destination {
+                    destination['rsync_manager'].destination} is locked. Waiting..."
             )
             time.sleep(WAIT_30_SEC)
             waited_for += WAIT_30_SEC
             if waited_for >= WAIT_1H:
                 self.logger.error(
-                    f"Destination {destination['rsync_manager'].destination} has been locked for too long. Skipping..."
+                    f"Destination {
+                        destination['rsync_manager'].destination} has been locked for too long. Skipping..."
                 )
                 return
 
@@ -386,17 +420,20 @@ class SyncApplication:
         for file in self.fs_monitor.get_regular_sync_files(destination.get("path")):
             if file.extension in extensions_to_ignore:
                 self.logger.debug(
-                    f"Removing file {file.path} from regular sync as it has an extension to ignore"
+                    f"Removing file {
+                        file.path} from regular sync as it has an extension to ignore"
                 )
                 self.fs_monitor.delete_regular_sync_file(file.path)
         for file in self.fs_monitor.get_immediate_sync_files(destination.get("path")):
             if file.extension in extensions_to_ignore:
                 self.logger.debug(
-                    f"Removing file {file.path} from immediate sync as it has an extension to ignore"
+                    f"Removing file {
+                        file.path} from immediate sync as it has an extension to ignore"
                 )
                 self.fs_monitor.delete_immediate_sync_file(file)
 
         destination["locked_on_sync"] = True
+        time_started = time.time()
         # Check if we have immedeate sync files
         self.immediate_sync_files_for_destination(
             destination,
@@ -404,11 +441,16 @@ class SyncApplication:
         )
         # Process regular sync
         self.process_regular_sync(
-            destination, self.fs_monitor.get_regular_sync_files(destination.get("path"))
+            destination, self.fs_monitor.get_regular_sync_files(
+                destination.get("path"))
         )
         # After every sync clear pending files
-        self.fs_monitor.delete_regular_sync_files_for_path(destination.get("path"))
-        self.fs_monitor.delete_immediate_sync_files_for_path(destination.get("path"))
+        self.fs_monitor.delete_regular_sync_files_for_path(
+            destination.get("path"), time_started
+        )
+        self.fs_monitor.delete_immediate_sync_files_for_path(
+            destination.get("path"), time_started
+        )
         destination["locked_on_sync"] = False
 
     def statistics_generator(
@@ -434,6 +476,6 @@ class SyncApplication:
             "log_type": log_type,
         }
         # If we have more than 10 statistics, remove the oldest one
-        if len(destination["statistics"]) >= 10:
-            destination["statistics"].pop(0)
+        if len(destination["statistics"]) >= self.max_stats:
+            destination["statistics"].pop(ZERO)
         destination["statistics"].append(stats)

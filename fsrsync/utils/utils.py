@@ -17,7 +17,8 @@ def run_command(command, **kwargs):
     print(captured_output)
     """
     try:
-        result = subprocess.run(command, shell=True, text=True, check=False, **kwargs)
+        result = subprocess.run(command, shell=True,
+                                text=True, check=False, **kwargs)
         return True, result.returncode, result.stdout, result.stderr
     except subprocess.CalledProcessError as e:
         logger.error(f"Command failed with return code {e.returncode}")
