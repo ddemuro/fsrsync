@@ -524,7 +524,9 @@ class SyncApplication:
                         f"Location {path} has not been synced. Running full sync..."
                     )
                     ensure_excludes = destination.get("files_to_exclude", None)
-                    destination["rsync_manager"].run(exclude_list=ensure_excludes)
+                    destination["rsync_manager"].run(
+                        exclude_list=ensure_excludes
+                        )
                     destination["location_last_full_sync"] = datetime.datetime.now()
                 else:
                     # Check if we need to run a full sync

@@ -51,6 +51,8 @@ class RsyncManager:
 
     def dedupe_a_list(self, a_list):
         """Return a deduplicated list of items"""
+        if not a_list:
+            return []
         new_list = []
         for item in a_list:
             if item not in new_list:
