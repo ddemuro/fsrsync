@@ -173,6 +173,12 @@ class SyncApplication:
         if not validate_path(path):
             self.logger.error(f"Invalid path: {path}, skipping destination...")
             return
+        # If destination is disabled, skip
+        if not dest_config.get("enabled", True):
+            self.logger.debug(
+                f"Destination {dest_config['destination']} is disabled. Skipping..."
+            )
+            return
 
         # Validate remote server format
         if "@" not in destination_path:

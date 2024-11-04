@@ -96,6 +96,8 @@ Each entry in the `destinations` array represents a configuration for a specific
 - **`destination`**: The remote user and host (e.g., `root@client`) to which data will be synced.
 
 - **`destination_path`**: The path on the remote system where data will be transferred.
+  
+- **`enabled`**: A Boolean (`true`/`false`) indicating if the destination is active for syncing.
 
 - **`full_sync_interval`**: The interval (in minutes) at which a full sync should be performed. A full sync transfers all files from the source to the destination.
 
