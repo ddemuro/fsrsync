@@ -32,13 +32,13 @@ class WebControl:
         return headers.get("secret") == self.secret
 
     @app.get("/")
-    async def list_routes():
+    async def list_routes():  # pylint: disable=no-self-argument, no-method-argument
         """List the routes"""
         routes = [{"path": route.path, "methods": route.methods, "name": route.name} for route in WebControl.app.routes]
         return {"routes": routes}
 
     @app.get("/regular_pending")
-    async def regular_pending(request: Request):
+    async def regular_pending(request: Request):  # pylint: disable=no-self-argument
         """Get regular pending files"""
         instance = WebControl._instance
         if not instance.check_if_secret_in_header(request.headers):
@@ -46,7 +46,7 @@ class WebControl:
         return instance.sync_state.fs_monitor.get_regular_sync_files()
 
     @app.get("/immediate_pending")
-    async def immediate_pending(request: Request):
+    async def immediate_pending(request: Request):  # pylint: disable=no-self-argument
         """Get immediate pending files"""
         instance = WebControl._instance
         if not instance.check_if_secret_in_header(request.headers):
@@ -54,7 +54,7 @@ class WebControl:
         return instance.sync_state.fs_monitor.get_immediate_sync_files()
 
     @app.get("/locked_files")
-    async def locked_files(request: Request):
+    async def locked_files(request: Request):  # pylint: disable=no-self-argument
         """Get locked files"""
         instance = WebControl._instance
         if not instance.check_if_secret_in_header(request.headers):
@@ -62,7 +62,7 @@ class WebControl:
         return instance.sync_state.fs_monitor.get_locked_files()
 
     @app.post("/add_locked_files")
-    async def add_locked_files(request: Request):
+    async def add_locked_files(request: Request):  # pylint: disable=no-self-argument
         """Set locked files"""
         instance = WebControl._instance
         if not instance.check_if_secret_in_header(request.headers):
@@ -74,7 +74,7 @@ class WebControl:
         return {"status": "success"}
 
     @app.post("/remove_locked_files")
-    async def remove_locked_files(request: Request):
+    async def remove_locked_files(request: Request):  # pylint: disable=no-self-argument
         """Remove a file from the locked files"""
         instance = WebControl._instance
         if not instance.check_if_secret_in_header(request.headers):
@@ -84,6 +84,23 @@ class WebControl:
         for file in files:
             instance.sync_state.fs_monitor.delete_locked_file(file)
         return {"status": "success"}
+
+    @app.get("/dashboard")
+    def dashboard(request: Request):  # pylint: disable=no-self-argument
+        """Get the dashboard"""
+        instance = WebControl._instance
+        if not instance.check_if_secret_in_header(request.headers):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        # Create a json per destination path show all the statistics in that destination
+        result = []
+        for destination in instance.sync_state.destinations:
+            result.append({
+                "destination": destination.get("path", ""),
+                "statistics": destination.get("statistics", {})
+            })
+        return {
+            "dashboard": result
+        }
 
     def run(self):
         """Run the web application"""
