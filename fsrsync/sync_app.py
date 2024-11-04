@@ -491,8 +491,10 @@ class SyncApplication:
             return None
         stats = {
             "path": destination.get("path"),
-            "regular_sync_files": len(regular_sync_files),
-            "immediate_sync_files": len(immediate_sync_files),
+            "regular_sync_files": regular_sync_files,
+            "immediate_sync_files": immediate_sync_files,
+            "regular_sync_files_count": len(regular_sync_files),
+            "immediate_sync_files_count": len(immediate_sync_files),
             "event_queue_limit": destination.get("event_queue_limit"),
             "event_count": len(regular_sync_files) + len(immediate_sync_files),
             # Get current time
