@@ -1,6 +1,9 @@
+import os
 import uvicorn
 import threading
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Form
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 
 
 class WebControl:
@@ -8,6 +11,8 @@ class WebControl:
 
     _instance = None
     app = FastAPI()
+    scriptdir = os.path.dirname(os.path.realpath(__file__))
+    templates = Jinja2Templates(directory=os.path.join(scriptdir, "templates"))
 
     def __new__(cls, *args, **kwargs):
         """Ensure that only one instance of WebControl exists"""
@@ -85,22 +90,32 @@ class WebControl:
             instance.sync_state.fs_monitor.delete_locked_file(file)
         return {"status": "success"}
 
-    @app.get("/dashboard")
-    def dashboard(request: Request):  # pylint: disable=no-self-argument
-        """Get the dashboard"""
+    @app.get("/dashboard", response_class=HTMLResponse)
+    async def dashboard(request: Request):  # pylint: disable=no-self-argument
         instance = WebControl._instance
-        if not instance.check_if_secret_in_header(request.headers):
-            raise HTTPException(status_code=401, detail="Unauthorized")
-        # Create a json per destination path show all the statistics in that destination
+        secret = request.query_params.get("secret")
+        
+        if not secret or secret != instance.secret:
+            # If secret is not provided or invalid, return template with `secret_provided` set to `False`
+            return instance.templates.TemplateResponse("dashboard.html", {
+                "request": request,
+                "secret_provided": False
+            })
+        
         result = []
         for destination in instance.sync_state.destinations:
             result.append({
                 "destination": destination.get("path", ""),
-                "statistics": destination.get("statistics", {})
+                "statistics": destination.get("statistics", {}),
             })
-        return {
-            "dashboard": result
-        }
+
+        # Return template with data when secret is valid
+        return instance.templates.TemplateResponse("dashboard.html", {
+            "request": request,
+            "result": result,
+            "secret_provided": True,
+            "secret": secret
+        })
 
     def run(self):
         """Run the web application"""

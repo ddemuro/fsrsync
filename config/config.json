@@ -6,7 +6,8 @@
     "control_server_secret": "secret",
     "destinations": [
         {
-            "destination": "user1@remote:/path/to/destination1",
+            "destination": "user1@remote",
+            "destination_path": "/path/to/destination1",
             "options": "-az --no-whole-file --delete --inplace",
             "event_queue_limit": 10,
             "path": "/path/to/directory1",
@@ -26,7 +27,8 @@
             ]
         },
         {
-            "destination": "user2@remote:/path/to/destination2",
+            "destination": "user2@remote",
+            "destination_path": "/path/to/destination2",
             "options": "-az --no-whole-file --delete --inplace",
             "ssh_key": "/path/to/ssh/key",
             "ssh_port": 22,

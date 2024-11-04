@@ -1,6 +1,7 @@
 """This module contains the functions to run commands on the remote server"""
 import os
 import paramiko
+from io import StringIO
 from .utils import validate_path
 
 
@@ -22,6 +23,22 @@ def read_linux_user_default_ssh_key():
         if root:
             return "/root/.ssh/id_rsa"
     except FileNotFoundError:
+        return None
+
+
+def read_ssh_key(ssh_key):
+    """Read the SSH key from the provided path"""
+    try:
+        if validate_path(ssh_key):
+            with open(ssh_key, "r", encoding="utf-8") as file:
+                f = file.read().strip()
+                stringiofile = StringIO(f)
+                return paramiko.RSAKey.from_private_key(stringiofile)
+    except FileNotFoundError:
+        return None
+    except paramiko.ssh_exception.SSHException as e:
+        # Handle invalid key format
+        print(f"Invalid SSH key format: {e}")
         return None
 
 
@@ -55,18 +72,20 @@ def run_ssh_command(command, host, username="root", ssh_key=None, logger=None):
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         # Use the provided key or password
         if ssh_key:
+            # Load ssh_key
             log_output(f"Connecting to {host} with key {ssh_key}", logger)
-            ssh.connect(host, username=username, key_filename=ssh_key)
+            ssh_key = read_ssh_key(ssh_key)
+            ssh.connect(host, username=username, pkey=ssh_key)
         else:
             log_output(f"Connecting to {host} with password", logger)
             ssh.connect(host, username=username)
 
-        stdin, stdout, stderr = ssh.exec_command(command, timeout=1000)
+        stdin, stdout, stderr = ssh.exec_command(command, timeout=1000, get_pty=True)
         output = stdout.read().decode('utf-8')
-        stderr = stderr.read().decode('utf-8')
-        # Get the exit status from the channel
-        if stdout.channel.recv_exit_status():
-            return True, stdout.channel.recv_exit_status(), output, stderr
-        return False, stdout.channel.recv_exit_status(), output, stderr
+        err = stderr.read().decode('utf-8')
+        exit_code = stdout.channel.recv_exit_status()
+        log_output(f"Running command: {command}, stdout: {output}, stderr: {err}, exit_code: {exit_code}", logger)
+        ssh.close()
+        return False, exit_code, output, stderr
     except Exception as e:  # pylint: disable=broad-except
         log_output(f"Error running ssh command: {e}", logger)

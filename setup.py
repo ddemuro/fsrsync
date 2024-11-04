@@ -9,14 +9,16 @@ setup(
     url='https://www.takelan.com/',
     license='Copyright 2019-2022 Derek Demuro',
     include_package_data=True,
-    packages=['fsrsync', 'config', 'fsrsync.utils'],
+    packages=['fsrsync', 'config', 'fsrsync.utils', 'fsrsync.templates'],
     package_dir={
         'fsrsync': 'fsrsync',
         'fsrsync.utils': 'fsrsync/utils',
+        'fsrsync.templates': 'fsrsync/templates',
         'config': 'config',
         },
     package_data={
         'fsrsync': ['*'],
+        'fsrsync.templates': ['*'],
         'fsrsync.utils': ['*'],
         'config': ['*'],
     },
@@ -29,6 +31,7 @@ setup(
         'python-multipart==0.0.16',
         'paramiko==3.5.0',
         'requests==2.32.3',
+        'jinja2==3.1.4',
     ],
     zip_safe=True,
     entry_points={
