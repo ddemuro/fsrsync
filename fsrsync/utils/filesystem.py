@@ -98,7 +98,7 @@ class FilesystemMonitor:
             self.logger.debug(f"File created: {full_path}")
             # Optionally: skip adding this to syncs immediately
 
-        if event_mask & EVENT_MAP["IN_OPEN"]:
+        if event_mask & EVENT_MAP["IN_OPEN"] and filename != "":
             self.logger.debug(f"File opened: {full_path}")
             self.add_to_locked_files(File(full_path, self.logger))
             return
