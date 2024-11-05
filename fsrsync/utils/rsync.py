@@ -27,6 +27,7 @@ class RsyncManager:
         """Initialize the rsync manager with destination and options"""
         self.destination = destination
         self.destination_path = destination_path
+        self.path = path
         self.options = options
         self.ssh_key = ssh_key
         self.ssh_port = ssh_port
