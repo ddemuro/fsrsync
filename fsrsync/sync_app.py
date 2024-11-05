@@ -170,7 +170,16 @@ class SyncApplication:
         """Set up a destination with an rsync manager and inotify watcher"""
         # Validate path
         path = dest_config.get("path", None)
-        destination_path = dest_config.get("destination", "")
+        destination = dest_config.get("destination", "")
+        destination_path = dest_config.get("destination_path", "")
+        
+        # Add / to the end of the path if it doesn't exist
+        if destination_path[-1] != "/":
+            destination_path += "/"
+        # Add / to the end of the path if it doesn't exist
+        if path[-1] != "/":
+            path += "/"
+
         self.logger.info(f"Setting up destination: {path}")
         if not validate_path(path):
             self.logger.error(f"Invalid path: {path}, skipping destination...")
@@ -183,15 +192,15 @@ class SyncApplication:
             return
 
         # Validate remote server format
-        if "@" not in destination_path:
+        if "@" not in destination:
             self.logger.error(
-                f"Invalid destination format: {destination_path}, skipping destination..."
+                f"Invalid destination format: {destination}, skipping destination..."
             )
             return
 
         rsync_manager = RsyncManager(
-            destination=destination_path,
-            destination_path=dest_config.get("destination_path", ""),
+            destination=destination,
+            destination_path=destination_path,
             path=path,
             options=dest_config.get("options", ""),
             ssh_user=dest_config.get("ssh_user", "root"),
@@ -229,7 +238,7 @@ class SyncApplication:
             "files_to_exclude": dest_config.get("files_to_exclude", []),
             "location_last_full_sync": None,
             "web_client": WebClient(
-                destination_path.split("@")[1],
+                destination.split("@")[1],
                 dest_config.get("control_server_port", DEFAULT_WEB_SERVER_PORT),
                 dest_config.get("control_server_secret", "secret"),
             ),
@@ -258,7 +267,7 @@ class SyncApplication:
         rsync_manager.add_path(path)
 
         # Add destination to the list of destinations
-        self.remote_hosts.append(destination_path.split("@")[1])
+        self.remote_hosts.append(destination.split("@")[1])
         self.destinations.append(destination_config)
 
     def validate_hostname_config(self):
