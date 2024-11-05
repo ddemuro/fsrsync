@@ -31,7 +31,6 @@ class RsyncManager:
         self.options = options
         self.ssh_key = ssh_key
         self.ssh_port = ssh_port
-        self.paths_to_monitor = []
         self.pre_sync_commands_local = pre_sync_commands_local or []
         self.post_sync_commands_local = post_sync_commands_local or []
         self.pre_sync_commands_remote = pre_sync_commands_remote or []
@@ -41,15 +40,6 @@ class RsyncManager:
         self.pre_sync_commands_checkexit_remote = pre_sync_commands_checkexit_remote or []
         self.post_sync_commands_checkexit_remote = post_sync_commands_checkexit_remote or []
         self.logger = Logger()
-
-    def add_path(self, path):
-        """Add a path to monitor for rsync"""
-        if path not in self.paths_to_monitor:
-            self.paths_to_monitor.append(path)
-
-    def clear_paths(self):
-        """Clear all paths to monitor"""
-        self.paths_to_monitor = []
 
     def dedupe_a_list(self, a_list):
         """Return a deduplicated list of items"""
@@ -145,9 +135,6 @@ class RsyncManager:
                     )
                     return False, False
 
-        # Construct paths string
-        paths_str = " ".join(self.paths_to_monitor)
-
         # Pre-set options from the configuration file
         options = f"{self.options} --stats"
 
@@ -168,13 +155,13 @@ class RsyncManager:
         # If include_list is provided, use it to sync only the specified files
         if include_list:
             rsync_command = (
-                f"rsync {options} {self.destination}:{self.destination_path}"
+                f"rsync {options} {self.path} {self.destination}:{self.destination_path}"
             )
             self.logger.info(
                 f"Only syncing files in include list: {include_list}, rsync command: {rsync_command}"
             )
         else:
-            rsync_command = f"rsync {options} {paths_str} {self.path} {self.destination}:{self.destination_path}"
+            rsync_command = f"rsync {options} {self.path} {self.destination}:{self.destination_path}"
             self.logger.info(f"Running regular rsync command: {rsync_command}")
         rsync_success, exit_code, stdout, stderr = run_command(rsync_command)
         if stdout:
