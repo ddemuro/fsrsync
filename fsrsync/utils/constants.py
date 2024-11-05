@@ -13,3 +13,5 @@ DEFAULT_HTTP_TIMEOUT = 120  # 2 minutes
 WARNING_MAX_TIME_FILE_OPEN = 86400  # 1 day
 DEFAULT_WEB_SERVER_PORT = 8080  # Default web server port
 DEFAULT_SSH_PORT = 22  # Default SSH port
+DEFAULT_LOGS = "/var/log/fsrsync.log"  # Default log file
+MAX_LOG_SIZE = 100 * 1024 * 1024  # 100 MB

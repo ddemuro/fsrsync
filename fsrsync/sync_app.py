@@ -23,6 +23,7 @@ from .utils.constants import (
     WARNING_MAX_TIME_FILE_OPEN,
     DEFAULT_SSH_PORT,
     DEFAULT_WEB_SERVER_PORT,
+    DEFAULT_LOGS,
 )
 
 
@@ -40,7 +41,10 @@ class SyncApplication:
         self.files_to_delete_after_sync_immediate = []
         self.syncs_running_currently = []
         self.config_manager.get_instance(config_file).load()
-        self.logger = Logger()
+        self.logs = self.config_manager.get_instance(config_file).config.get(
+            "logs", DEFAULT_LOGS
+        )
+        self.logger = Logger(filename=self.logs)
         self.logger.set_level(
             self.config_manager.get_instance(config_file)
             .config.get("loglevel", "INFO")
