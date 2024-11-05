@@ -263,9 +263,6 @@ class SyncApplication:
         if not self.full_sync:
             self.fs_monitor.add_watch(path, events)
 
-        # Add the path to the rsync manager
-        rsync_manager.add_path(path)
-
         # Add destination to the list of destinations
         self.remote_hosts.append(destination.split("@")[1])
         self.destinations.append(destination_config)
