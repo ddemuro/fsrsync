@@ -504,7 +504,7 @@ class SyncApplication:
             "event_queue_limit": destination.get("event_queue_limit"),
             "event_count": len(regular_sync_files) + len(immediate_sync_files),
             # Get current time
-            "last_sync": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "last_sync": str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
             "last_full_sync": destination.get("location_last_full_sync", None),
             "result": sync_result,
             "log_type": log_type,

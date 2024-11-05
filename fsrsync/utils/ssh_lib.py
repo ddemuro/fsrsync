@@ -24,6 +24,9 @@ def read_linux_user_default_ssh_key():
             return "/root/.ssh/id_rsa"
     except FileNotFoundError:
         return None
+    except Exception as e:  # pylint: disable=broad-except
+        print(f"Error reading default SSH key: {e}")
+        return None
 
 
 def read_ssh_key(ssh_key):
@@ -39,6 +42,9 @@ def read_ssh_key(ssh_key):
     except paramiko.ssh_exception.SSHException as e:
         # Handle invalid key format
         print(f"Invalid SSH key format: {e}")
+        return None
+    except Exception as e:  # pylint: disable=broad-except
+        print(f"Error reading SSH key: {e}")
         return None
 
 
@@ -90,3 +96,4 @@ def run_ssh_command(command, host, username="root", ssh_key=None, logger=None):
         return exit_code == 0, exit_code, output, stderr
     except Exception as e:  # pylint: disable=broad-except
         log_output(f"Error running ssh command: {e}", logger)
+        return False, None, None, None
