@@ -27,7 +27,13 @@ class RsyncManager:
         """Initialize the rsync manager with destination and options"""
         self.destination = destination
         self.destination_path = destination_path
+        # If destination path has no trailing slash, add one
+        if self.destination_path[-1] != "/":
+            self.destination_path += "/"
         self.path = path
+        # If path has no trailing slash, add one
+        if self.path[-1] != "/":
+            self.path += "/"
         self.options = options
         self.ssh_key = ssh_key
         self.ssh_port = ssh_port
@@ -149,7 +155,7 @@ class RsyncManager:
         paths_str = " ".join(self.paths_to_monitor)
 
         # Pre-set options from the configuration file
-        options = f"{self.options}"
+        options = f"{self.options} --stats"
 
         # Add SSH key and port options if provided
         if self.ssh_key and self.ssh_port:
@@ -168,7 +174,7 @@ class RsyncManager:
         # If include_list is provided, use it to sync only the specified files
         if include_list:
             rsync_command = (
-                f"rsync {options} --stats {self.destination}:{self.destination_path}"
+                f"rsync {options} {self.destination}:{self.destination_path}"
             )
             self.logger.info(
                 f"Only syncing files in include list: {include_list}, rsync command: {rsync_command}"
