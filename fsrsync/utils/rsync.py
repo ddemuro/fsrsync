@@ -10,6 +10,7 @@ class RsyncManager:
         self,
         destination,
         destination_path,
+        path,
         options,
         ssh_user=None,
         ssh_key=None,
@@ -26,6 +27,7 @@ class RsyncManager:
         """Initialize the rsync manager with destination and options"""
         self.destination = destination
         self.destination_path = destination_path
+        self.path = path
         self.options = options
         self.ssh_key = ssh_key
         self.ssh_port = ssh_port
@@ -172,7 +174,7 @@ class RsyncManager:
                 f"Only syncing files in include list: {include_list}, rsync command: {rsync_command}"
             )
         else:
-            rsync_command = f"rsync {options} {paths_str} {self.destination}:{self.destination_path}"
+            rsync_command = f"rsync {options} {paths_str} {self.path} {self.destination}:{self.destination_path}"
             self.logger.info(f"Running regular rsync command: {rsync_command}")
         rsync_success, exit_code, stdout, stderr = run_command(rsync_command)
         if stdout:

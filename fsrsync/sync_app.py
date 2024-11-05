@@ -192,6 +192,7 @@ class SyncApplication:
         rsync_manager = RsyncManager(
             destination=destination_path,
             destination_path=dest_config.get("destination_path", ""),
+            path=path,
             options=dest_config.get("options", ""),
             ssh_user=dest_config.get("ssh_user", "root"),
             ssh_key=dest_config.get("ssh_key", None),
