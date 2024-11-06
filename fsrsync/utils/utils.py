@@ -4,8 +4,6 @@ import psutil
 
 from .logs import Logger
 
-logger = Logger()
-
 
 def run_command(command, **kwargs):
     """
@@ -16,6 +14,7 @@ def run_command(command, **kwargs):
     captured_output = runner.run_command('ls -l', stdout='output.txt')
     print(captured_output)
     """
+    logger = Logger()
     try:
         result = subprocess.run(command, shell=True,
                                 text=True, check=False, **kwargs)
