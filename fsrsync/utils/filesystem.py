@@ -96,6 +96,7 @@ class FilesystemMonitor:
         type_names = [str(flag) for flag in flags.from_mask(event_mask)]
         filename = event.name or ""
         full_path = f"{path}/{filename}" if filename else path
+        full_path = fix_path_slashes(full_path)
 
         self.logger.info(f"Event detected: {type_names} on {full_path}")
 

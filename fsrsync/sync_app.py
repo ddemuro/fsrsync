@@ -141,7 +141,6 @@ class SyncApplication:
             find_server.lock(self.hostname)
             self.global_server_locks.append(find_server)
             self.logger.info(f"Added lock for server {server}")
-        self.logger.error(f"Server {server} already exists in global server locks")
         return True
 
     def remove_from_global_server_locks(self, server):
@@ -154,7 +153,6 @@ class SyncApplication:
                 result = find_server.unlock(self.hostname)
                 self.logger.info(f"Removed lock for server {server}, result: {result}")
                 return result
-        self.logger.error(f"Server {server} not found in global server locks")
         return True
 
     def check_global_server_locks(self):
@@ -419,20 +417,6 @@ class SyncApplication:
                 self.logger.error(
                     f"Rsync failed for destination {destination['rsync_manager'].destination}, not clearing pending files..."
                 )
-                # Remove destination from global server locks
-                notification = self.remove_remote_global_server_locks(destination)
-                self.logger.debug(
-                    f"Immediate removed destination {destination.get('remote_hostname', None)} to global server locks. Result: {notification}"
-                )
-                self.statistics_generator(
-                    destination,
-                    self.fs_monitor.get_regular_sync_files(destination_path),
-                    self.fs_monitor.get_immediate_sync_files(destination_path),
-                    sync_result=rsync_result,
-                    notification_result=notification,
-                    log_type="immediate",
-                )
-                return
             # Remove destination from global server locks
             notification = self.remove_remote_global_server_locks(destination)
             self.logger.debug(
@@ -505,41 +489,6 @@ class SyncApplication:
                 self.logger.error(
                     f"Rsync failed for destination {destination['rsync_manager'].destination}, not clearing pending files..."
                 )
-                # Remove destination from global server locks
-                notification = self.remove_remote_global_server_locks(destination)
-                self.logger.debug(
-                    f"Regular removed destination {destination.get('remote_hostname', None)} to global server locks. Result: {notification}"
-                )
-                self.statistics_generator(
-                    destination,
-                    self.fs_monitor.get_regular_sync_files(destination_path),
-                    self.fs_monitor.get_immediate_sync_files(destination_path),
-                    sync_result=rsync_result,
-                    notification_result=notification,
-                    log_type="regular",
-                )
-                return
-            # Add destination to global server locks if needed
-            notification = self.notify_remote_global_server_locks(destination)
-            if not notification:
-                self.logger.error(
-                    f"Could not run regular sync for destination {destination.get('remote_hostname', None)} to global server locks. Skipping regular sync..."
-                )
-                self.statistics_generator(
-                    destination,
-                    self.fs_monitor.get_regular_sync_files(destination_path),
-                    self.fs_monitor.get_immediate_sync_files(destination_path),
-                    sync_result=False,
-                    notification_result=notification,
-                    log_type="regular",
-                )
-                return
-            # Remove these files from the regular sync list
-            for file in events:
-                file.synced_successfully = True
-                file.synced_time = time_sync_start
-                self.files_to_delete_after_sync_regular.append(file)
-
             # Remove destination from global server locks
             notification = self.remove_remote_global_server_locks(destination)
             self.logger.debug(
@@ -553,6 +502,11 @@ class SyncApplication:
                 notification_result=notification,
                 log_type="regular",
             )
+            # Remove these files from the regular sync list
+            for file in events:
+                file.synced_successfully = True
+                file.synced_time = time_sync_start
+                self.files_to_delete_after_sync_regular.append(file)
 
     def manage_destination_event(self, destination):
         """Manage events for a destination"""
@@ -631,6 +585,7 @@ class SyncApplication:
         use_gsl = destination.get("use_global_server_lock", False)
         notify_server_locks = destination.get("notify_file_locks", False)
         remote_hostname = destination.get("remote_hostname", None)
+        self.logger.debug(f"Adding remote global server locks for {destination}, use_gsl: {use_gsl}, notify_server_locks: {notify_server_locks}, remote_hostname: {remote_hostname}")
         if use_gsl and remote_hostname is not None and notify_server_locks:
             while self.check_if_server_is_locked(remote_hostname):
                 self.logger.debug(
@@ -668,6 +623,7 @@ class SyncApplication:
         use_gsl = destination.get("use_global_server_lock", False)
         notify_server_locks = destination.get("notify_file_locks", False)
         remote_hostname = destination.get("remote_hostname", None)
+        self.logger.debug(f"Removing remote global server locks for {destination}, use_gsl: {use_gsl}, notify_server_locks: {notify_server_locks}, remote_hostname: {remote_hostname}")
         if use_gsl and remote_hostname is not None and notify_server_locks:
             # Add destination to global server locks with wait if locked
             waited_for = ZERO
