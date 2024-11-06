@@ -18,7 +18,7 @@ fi
 echo "Creating version $1"
 read -r -p "Do you want to create git tag? [y/N] " r
 if [[ "$r" =~ ^([yY][eE][sS]|[yY])$ ]]; then
-        git tag -a "v$1" -m "New version from script! $1"
+        git tag -a -s "v$1" -m "New version from script! $1"
         if [ $? -eq 0 ]; then
                 echo "Tag created successfully"
         else
