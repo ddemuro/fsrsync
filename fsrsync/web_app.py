@@ -67,8 +67,7 @@ class WebControl:
         result = instance.sync_state.remove_from_global_server_locks(server)
         return {"status": result}
 
-    # Post to add a file to 
-
+    # Post to add a file to files_to_delete_after_sync_regular in instance.sync_state.add_to_files_to_delete_after_sync_regular format of post {"file": "file_name"}
     @app.get("/regular_pending")
     async def regular_pending(request: Request):  # pylint: disable=no-self-argument
         """Get regular pending files"""

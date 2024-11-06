@@ -389,9 +389,19 @@ class SyncApplication:
             )
             # Add destination to global server locks if needed
             notification = self.notify_remote_global_server_locks(destination)
-            self.logger.debug(
-                f"Immediate added destination {destination.get('remote_hostname', None)} to global server locks. Result: {notification}"
-            )
+            if not notification:
+                self.logger.error(
+                    f"Could not run immediate sync for destination {destination.get('remote_hostname', None)} to global server locks. Skipping immediate sync..."
+                )
+                self.statistics_generator(
+                    destination,
+                    self.fs_monitor.get_regular_sync_files(destination_path),
+                    self.fs_monitor.get_immediate_sync_files(destination_path),
+                    sync_result=False,
+                    notification_result=notification,
+                    log_type="immediate",
+                )
+                return
             # ensure_excludes should be EXCLUDE_ALL + destination.get("files_to_exclude", [])
             ensure_excludes = destination.get("files_to_exclude", [])
             ensure_excludes.extend(EXCLUDE_ALL)
@@ -465,9 +475,19 @@ class SyncApplication:
 
             # Add destination to global server locks if needed
             notification = self.notify_remote_global_server_locks(destination)
-            self.logger.debug(
-                f"Regular added destination {destination.get('remote_hostname', None)} to global server locks. Result: {notification}"
-            )
+            if not notification:
+                self.logger.error(
+                    f"Could not run regular sync for destination {destination.get('remote_hostname', None)} to global server locks. Skipping regular sync..."
+                )
+                self.statistics_generator(
+                    destination,
+                    self.fs_monitor.get_regular_sync_files(destination_path),
+                    self.fs_monitor.get_immediate_sync_files(destination_path),
+                    sync_result=False,
+                    notification_result=notification,
+                    log_type="regular",
+                )
+                return
             # ensure_excludes should be EXCLUDE_ALL + destination.get("files_to_exclude", [])
             ensure_excludes = destination.get("files_to_exclude", [])
             ensure_excludes.extend(EXCLUDE_ALL)
@@ -498,9 +518,19 @@ class SyncApplication:
                 return
             # Add destination to global server locks if needed
             notification = self.notify_remote_global_server_locks(destination)
-            self.logger.debug(
-                f"Added destination {destination.get('remote_hostname', None)} to global server locks. Result: {notification}"
-            )
+            if not notification:
+                self.logger.error(
+                    f"Could not run regular sync for destination {destination.get('remote_hostname', None)} to global server locks. Skipping regular sync..."
+                )
+                self.statistics_generator(
+                    destination,
+                    self.fs_monitor.get_regular_sync_files(destination_path),
+                    self.fs_monitor.get_immediate_sync_files(destination_path),
+                    sync_result=False,
+                    notification_result=notification,
+                    log_type="regular",
+                )
+                return
             # Remove these files from the regular sync list
             for file in events:
                 file.synced_successfully = True
@@ -613,10 +643,10 @@ class SyncApplication:
             )
             ldest = self.add_to_global_server_locks(destination["remote_hostname"])
             self.logger.debug(
-                f"Added destination {destination.get('remote_hostname', None)} to global server locks. Result: {rdest and ldest}"
+                f"Added destination {destination.get('remote_hostname', None)} to global server locks. Result: RDST: {rdest} and LDST: {ldest}"
             )
             return rdest and ldest
-        return False, False
+        return False
 
     def remove_remote_global_server_locks(self, destination):
         """Remove remote server from global server locks"""
@@ -641,10 +671,10 @@ class SyncApplication:
             )
             ldest = self.remove_from_global_server_locks(destination["remote_hostname"])
             self.logger.debug(
-                f"Removed destination {destination.get('remote_hostname', None)} from global server locks. Result: {rdest and ldest}"
+                f"Removed destination {destination.get('remote_hostname', None)} from global server locks. Result: RDST: {rdest} and LDST: {ldest}"
             )
             return rdest and ldest
-        return False, False
+        return False
 
     def statistics_generator(
         self,
@@ -700,9 +730,19 @@ class SyncApplication:
                     ensure_excludes = destination.get("files_to_exclude", None)
                     # Add destination to global server locks if needed
                     notification = self.notify_remote_global_server_locks(destination)
-                    self.logger.debug(
-                        f"Added destination {destination.get('remote_hostname', None)} to global server locks. Result: {notification}"
-                    )
+                    if not notification:
+                        self.logger.error(
+                            f"Could not run full sync for destination {destination.get('remote_hostname', None)} to global server locks. Skipping full sync..."
+                        )
+                        self.statistics_generator(
+                            destination,
+                            self.fs_monitor.get_regular_sync_files(path),
+                            self.fs_monitor.get_immediate_sync_files(path),
+                            sync_result=False,
+                            notification_result=notification,
+                            log_type="full",
+                        )
+                        continue
                     destination["rsync_manager"].run(
                         exclude_list=ensure_excludes
                         )
