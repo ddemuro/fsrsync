@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='fsrsync',
-    version='0.1.2',
+    version='#TAG_VERSION#',
     description='FSRsync is a Python package that provides a simple way to synchronize files between two directories based on inotify with locks.',
     author='Derek Demuro',
     author_email='fsrsync@detrashme.com',
