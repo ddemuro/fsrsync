@@ -8,16 +8,18 @@ cd /fsrsync
 
 # Generate keys
 HOSTNAME=$(hostname)
-mkdir -p /root/.ssh/
+mkdir -p /root/.ssh/ /run/sshd/
 chmod 700 /root/.ssh/
+eval "$(ssh-agent -s)" # Running ssh-agent
+echo "StrictHostKeyChecking no" >> $(find /etc -iname ssh_config) # Avoiding host check by changing the global configuration of ssh client
 if [ $HOSTNAME = "client" ]; then
-    echo "Setting client keys"
+    echo "Setting client keys for $HOSTNAME"
     cp /root/keys/client/* /root/.ssh/
     chmod 600 /root/.ssh/id_rsa
     chmod 644 /root/.ssh/id_rsa.pub
 fi
 if [ $HOSTNAME = "server" ]; then
-    echo "Setting server keys"
+    echo "Setting server keys for $HOSTNAME"
     cp /root/keys/server/* /root/.ssh/
     chmod 600 /root/.ssh/id_rsa
     chmod 644 /root/.ssh/id_rsa.pub

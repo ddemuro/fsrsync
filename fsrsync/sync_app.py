@@ -334,6 +334,8 @@ class SyncApplication:
             "max_wait_locked": dest_config.get("max_wait_locked", WAIT_60_SEC),
         }
 
+        self.logger.debug(f"Destination config: {destination_config}")
+
         # Set filesystem warning time
         self.logger.debug(
             f"Setting warning file open time for {path} to {dest_config.get('warning_file_open_time', WARNING_MAX_TIME_FILE_OPEN)}"
@@ -626,14 +628,24 @@ class SyncApplication:
         """Notify remote server of global server locks"""
         # Add destination to global server locks if needed
         waited_for = ZERO
-        if destination.get("use_global_server_lock", False) and destination.get("remote_hostname", False):
-            while self.check_if_server_is_locked(destination["remote_hostname"]):
+        use_gsl = destination.get("use_global_server_lock", False)
+        notify_server_locks = destination.get("notify_file_locks", False)
+        remote_hostname = destination.get("remote_hostname", None)
+        if use_gsl and remote_hostname is not None and notify_server_locks:
+            while self.check_if_server_is_locked(remote_hostname):
                 self.logger.debug(
                     f"Destination {destination.get('remote_hostname', None)} is locked. Waiting..."
                 )
                 time.sleep(WAIT_60_SEC)
                 waited_for += WAIT_60_SEC
                 if waited_for >= WAIT_1H:
+                    still_locked = destination.get("web_client").check_if_server_is_locked(remote_hostname)
+                    if not still_locked.get("result", False):
+                        self.logger.debug(
+                            f"Destination {destination.get('remote_hostname', None)} no longer locked. Continuing..."
+                        )
+                        self.remove_from_global_server_locks(remote_hostname)
+                        break
                     self.logger.error(
                         f"Destination {destination.get('remote_hostname', None)} has been locked for too long. Skipping..."
                     )
@@ -642,20 +654,24 @@ class SyncApplication:
             rdest = destination.get("web_client").add_to_global_server_lock(
                 self.config_manager.get_hostname()
             )
-            ldest = self.add_to_global_server_locks(destination["remote_hostname"])
+            ldest = self.add_to_global_server_locks(remote_hostname)
             self.logger.debug(
                 f"Added destination {destination.get('remote_hostname', None)} to global server locks. Result: RDST: {rdest} and LDST: {ldest}"
             )
             return rdest and ldest
+
         return False
 
     def remove_remote_global_server_locks(self, destination):
         """Remove remote server from global server locks"""
         # Add destination to global server locks if needed
-        if destination.get("use_global_server_lock", False) and destination.get("remote_hostname", False):
+        use_gsl = destination.get("use_global_server_lock", False)
+        notify_server_locks = destination.get("notify_file_locks", False)
+        remote_hostname = destination.get("remote_hostname", None)
+        if use_gsl and remote_hostname is not None and notify_server_locks:
             # Add destination to global server locks with wait if locked
             waited_for = ZERO
-            while self.check_if_server_is_locked(destination["remote_hostname"]):
+            while self.check_if_server_is_locked(remote_hostname):
                 self.logger.debug(
                     f"Destination {destination.get('remote_hostname', None)} is locked. Waiting..."
                 )
@@ -670,7 +686,7 @@ class SyncApplication:
             rdest = destination.get("web_client").remove_from_global_server_lock(
                 self.config_manager.get_hostname()
             )
-            ldest = self.remove_from_global_server_locks(destination["remote_hostname"])
+            ldest = self.remove_from_global_server_locks(remote_hostname)
             self.logger.debug(
                 f"Removed destination {destination.get('remote_hostname', None)} from global server locks. Result: RDST: {rdest} and LDST: {ldest}"
             )

@@ -53,7 +53,7 @@ class WebControl:
         request_body = await request.json()
         server = request_body.get("server")
         result = instance.sync_state.add_to_global_server_locks(server)
-        return {"status": "success"}
+        return {"status": result}
 
     # Post to remove a string to remove_from_global_server_locks in instance.sync_state.remove_from_global_server_locks format of post {"server": "server_name"}
     @app.post("/remove_from_global_server_lock")
@@ -65,6 +65,17 @@ class WebControl:
         request_body = await request.json()
         server = request_body.get("server")
         result = instance.sync_state.remove_from_global_server_locks(server)
+        return {"status": result}
+
+    @app.post("/check_if_server_locked")
+    async def check_if_server_locked(request: Request):  # pylint: disable=no-self-argument
+        """Check if a server is locked"""
+        instance = WebControl._instance
+        if not instance.check_if_secret_in_header(request.headers):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        request_body = await request.json()
+        server = request_body.get("server")
+        result = instance.sync_state.check_if_server_is_locked(server)
         return {"status": result}
 
     # Post to add a file to files_to_delete_after_sync_regular in instance.sync_state.add_to_files_to_delete_after_sync_regular format of post {"file": "file_name"}

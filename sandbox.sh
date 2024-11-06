@@ -27,8 +27,11 @@ function test() {
     export OPERATION="$1"
     docker compose build client
 
+    # Cleanup the test directories
+    rm -r test/destination/*
+
     # Run the client
-    docker compose up -d client
+    docker compose up client &disown
     echo "Wait for 20 seconds for the client to start..."
     sleep 20
     echo "Starting the server to send files to the client..."
@@ -41,9 +44,9 @@ function test() {
     #
     echo "Testing adding a file to source, should trigger a send to client..."
     # Add a file to the source directory
-    echo "Hello, World!" > test/source/test.txt
+    echo "Hello, World!" > test/source/test
     # Check if file exists in the client directory
-    if [ -f "test/destination/test.txt" ]; then
+    if [ -f "test/destination/test" ]; then
         echo "File was successfully sent to the client!"
         SUCCESS="$SUCCESS,0"
     else
@@ -56,9 +59,9 @@ function test() {
     #
     echo "Testing removing a file from source, should trigger a delete on client..."
     # Remove the file from the source directory
-    rm test/source/test.txt
+    rm test/destination/test
     # Check if file exists in the client directory
-    if [ ! -f "test/destination/test.txt" ]; then
+    if [ ! -f "test/destination/test" ]; then
         echo "File was successfully deleted from the client!"
         SUCCESS="$SUCCESS,0"
     else
@@ -67,8 +70,10 @@ function test() {
     fi
 
     # Check if all tests passed using grep on the SUCCESS variable
+    ENDRES=0
     if echo $SUCCESS | grep -q "1"; then
         echo "Tests failed!"
+        ENDRES=1
     else
         echo "All tests passed!"
     fi
@@ -80,6 +85,7 @@ function test() {
     # Stop the server and client
     docker compose down
     # rm -rf test/destination/source
+    exit $ENDRES
 }
 
 function exec() {
@@ -129,6 +135,10 @@ while [[ $# -gt 0 ]]; do
             fi
             # Otherwise, run normal test
             test sync
+            ;;
+        testbuild)
+            build
+            test
             ;;
         exec)
             exec $2
