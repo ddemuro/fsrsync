@@ -27,12 +27,12 @@ class File:
 
     def __init__(self, path, logger):
         """Initialize the file with a path"""
-        if not path:
-            raise ValueError("Path cannot be empty, this is a bug")
         self.path = fix_path_slashes(path)
         # Get the extension if it exists
         if "." in path:
             self.extension = path.split(".")[-1]
+        else:
+            self.extension = None
         self.logger = logger
         self.start_time = time.time()
         self.successfully_synced = False

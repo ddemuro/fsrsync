@@ -728,21 +728,14 @@ class SyncApplication:
                         f"Location {path} has not been synced. Running full sync..."
                     )
                     ensure_excludes = destination.get("files_to_exclude", None)
-                    # Add destination to global server locks if needed
-                    notification = self.notify_remote_global_server_locks(destination)
-                    if not notification:
-                        self.logger.error(
-                            f"Could not run full sync for destination {destination.get('remote_hostname', None)} to global server locks. Skipping full sync..."
-                        )
-                        self.statistics_generator(
-                            destination,
-                            self.fs_monitor.get_regular_sync_files(path),
-                            self.fs_monitor.get_immediate_sync_files(path),
-                            sync_result=False,
-                            notification_result=notification,
-                            log_type="full",
-                        )
-                        continue
+                    self.statistics_generator(
+                        destination,
+                        self.fs_monitor.get_regular_sync_files(path),
+                        self.fs_monitor.get_immediate_sync_files(path),
+                        sync_result=False,
+                        notification_result=None,
+                        log_type="full",
+                    )
                     destination["rsync_manager"].run(
                         exclude_list=ensure_excludes
                         )
@@ -755,10 +748,6 @@ class SyncApplication:
                     full_sync_interval = destination.get("full_sync_interval", DEFAULT_FULL_SYNC)
                     if time_diff.total_seconds() / 60 >= full_sync_interval:
                         # Remove destination from global server locks
-                        notification = self.remove_remote_global_server_locks(destination)
-                        self.logger.debug(
-                            f"Removed destination {destination.get('remote_hostname', None)} to global server locks. Result: {notification}"
-                        )
                         self.logger.debug(
                             f"Location {path} has not been synced in over {full_sync_interval} minutes. Running full sync..."
                         )
