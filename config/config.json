@@ -5,6 +5,7 @@
     "control_server_host": "0.0.0.0",
     "control_server_secret": "secret",
     "max_stats": 10,
+    "max_server_lock_time": 60,
     "destinations": [
         {
             "destination": "user1@remote",
@@ -13,13 +14,15 @@
             "event_queue_limit": 10,
             "path": "/path/to/directory1",
             "full_sync_interval": 30,
+            "use_global_server_lock": true,
+            "remote_hostname": "client",
+            "warning_file_open_time": 86400,
+            "control_server_port": 8080,
+            "control_server_host": "0.0.0.0",
             "events": [
                 "IN_CREATE",
                 "IN_MODIFY"
             ],
-            "warning_file_open_time": 86400,
-            "control_server_port": 8080,
-            "control_server_host": "0.0.0.0",
             "extensions_to_ignore": [
                 ".swp",
                 ".swx",
@@ -35,10 +38,13 @@
             "ssh_key": "/path/to/ssh/key",
             "ssh_port": 22,
             "event_queue_limit": 5,
+            "remote_hostname": "client",
             "control_server_port": 8081,
             "control_server_host": "0.0.0.0",
+            "control_server_lock": true,
             "path": "/path/to/directory3",
             "full_sync_interval": 30,
+            "use_global_server_lock": true,
             "events": [
                 "IN_MODIFY",
                 "IN_DELETE"

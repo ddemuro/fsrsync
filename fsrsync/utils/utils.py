@@ -108,3 +108,13 @@ def is_file_open(file_path):
         print(f"Error: {e}")
 
     return False  # File not open
+
+
+def fix_path_slashes(path):
+    """Fix path slashes"""
+    if path[-1] != "/":
+        path += "/"
+    # If // is detected replace with /
+    if "//" in path:
+        path = path.replace("//", "/")
+    return path

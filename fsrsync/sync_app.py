@@ -7,7 +7,7 @@ from .utils.logs import Logger
 from .web_app import WebControl
 from .utils.rsync import RsyncManager
 from .utils.sentry import setup_sentry
-from .utils.utils import validate_path
+from .utils.utils import validate_path, fix_path_slashes
 from .utils.filesystem import FilesystemMonitor
 from .utils.configuration import ConfigurationManager
 from .utils.web_client import WebClient
@@ -27,6 +27,58 @@ from .utils.constants import (
 )
 
 
+class ServerLocker:
+    """Server class to manage the application"""
+    
+    def __init__(self, server_name, is_self=False, max_lock_time=30,
+                 logger=None):
+        """Initialize the server with a name"""
+        self.server_name = server_name
+        self.locked = False
+        self.server_initiated_lock = ""
+        self.created_date = datetime.datetime.now()
+        self.locked_date = None
+        self.is_self = is_self
+        self.max_lock_time = max_lock_time  # 30 minutes
+        self.log = logger
+
+    def logger(self, message):
+        """Get the logger"""
+        if self.log is None:
+            return
+        return self.log.info(message)
+
+    def lock(self, server_name):
+        """Lock the server"""
+        if self.locked:
+            self.logger(f"Server {self.server_name} is already locked")
+            return False
+        self.locked = True
+        self.server_initiated_lock = server_name
+        self.locked_date = datetime.datetime.now()
+        self.logger(f"Lock for server {self.server_name} has been initiated")
+        return True
+
+    def unlock(self, server_name):
+        """Unlock the server"""
+        if self.locked and self.server_initiated_lock == server_name:
+            self.locked = False
+            self.locked_date = None
+            self.logger(f"Lock for server {self.server_name} has been removed")
+            return True
+        self.logger(f"Lock for server {self.server_name} has not been removed")
+        return False
+
+    def clear_lock_if_expired(self):
+        """Clear the lock if it has expired"""
+        if self.locked:
+            time_diff = datetime.datetime.now() - self.locked_date
+            if time_diff.total_seconds() / 60 >= self.max_lock_time:
+                self.locked = False
+                self.logger(f"Lock for server {self.server_name} has expired")
+            self.logger(f"Lock for server {self.server_name} has not expired")
+
+
 class SyncApplication:
     """Main application class to monitor filesystem events and trigger rsync"""
 
@@ -35,16 +87,20 @@ class SyncApplication:
         self.config_manager = ConfigurationManager(config_file)
         self.fs_monitor = FilesystemMonitor()
         self.remote_hosts = []
-        self.global_server_locks = []
         self.destinations = []
         self.files_to_delete_after_sync_regular = []
         self.files_to_delete_after_sync_immediate = []
         self.syncs_running_currently = []
         self.config_manager.get_instance(config_file).load()
+        self.hostname = self.config_manager.get_instance(config_file).get_hostname()
         self.logs = self.config_manager.get_instance(config_file).config.get(
             "logs", DEFAULT_LOGS
         )
         self.logger = Logger(filename=self.logs)
+        # Initialize global server locks
+        self.global_server_locks = [ServerLocker(server_name=self.hostname,
+                                                 is_self=True,
+                                                 logger=self.logger)]
         self.logger.set_level(
             self.config_manager.get_instance(config_file)
             .config.get("loglevel", "INFO")
@@ -63,17 +119,48 @@ class SyncApplication:
         self.full_sync = full_sync  # Full sync flag
         self.web_control = None
 
+    def check_if_server_is_locked(self, server):
+        """Check if a server is locked"""
+        for server_lock in self.global_server_locks:
+            if server_lock.server_name == server:
+                return server_lock.locked
+        return False
+
     def add_to_global_server_locks(self, server):
         """Add a lock to the global server locks"""
         # Only add the lock if it doesn't already exist
-        if server not in self.global_server_locks:
-            self.global_server_locks.append(server)
+        find_server = None
+        for server_lock in self.global_server_locks:
+            if server_lock.server_name == server:
+                find_server = server_lock
+                result = find_server.lock(self.hostname)
+                self.logger.info(f"Added lock for server {server}, result: {result}")
+                return result
+        if find_server is None:
+            find_server = ServerLocker(server_name=server)
+            find_server.lock(self.hostname)
+            self.global_server_locks.append(find_server)
+            self.logger.info(f"Added lock for server {server}")
+        self.logger.error(f"Server {server} already exists in global server locks")
+        return True
 
     def remove_from_global_server_locks(self, server):
         """Remove a lock from the global server locks"""
         # Only remove the lock if it exists
-        if server in self.global_server_locks:
-            self.global_server_locks.remove(server)
+        find_server = None
+        for server_lock in self.global_server_locks:
+            if server_lock.server_name == server:
+                find_server = server_lock
+                result = find_server.unlock(self.hostname)
+                self.logger.info(f"Removed lock for server {server}, result: {result}")
+                return result
+        self.logger.error(f"Server {server} not found in global server locks")
+        return True
+
+    def check_global_server_locks(self):
+        """Check global server locks"""
+        for server in self.global_server_locks:
+            server.clear_lock_if_expired()
 
     def setup(self):
         """Set up the application by loading configuration and setting up rsync managers"""
@@ -173,16 +260,12 @@ class SyncApplication:
     def setup_destination(self, dest_config):
         """Set up a destination with an rsync manager and inotify watcher"""
         # Validate path
-        path = dest_config.get("path", None)
         destination = dest_config.get("destination", "")
         destination_path = dest_config.get("destination_path", "")
-        
-        # Add / to the end of the path if it doesn't exist
-        if destination_path[-1] != "/":
-            destination_path += "/"
-        # Add / to the end of the path if it doesn't exist
-        if path[-1] != "/":
-            path += "/"
+        path = dest_config.get("path", None)
+        # Fix path slashes
+        destination_path = fix_path_slashes(destination_path)
+        path = fix_path_slashes(path)
 
         self.logger.info(f"Setting up destination: {path}")
         if not validate_path(path):
@@ -242,9 +325,10 @@ class SyncApplication:
             "files_to_exclude": dest_config.get("files_to_exclude", []),
             "location_last_full_sync": None,
             "web_client": WebClient(
-                destination.split("@")[1],
+                dest_config.get("control_server_host", ""),
                 dest_config.get("control_server_port", DEFAULT_WEB_SERVER_PORT),
                 dest_config.get("control_server_secret", "secret"),
+                dest_config.get("control_server_lock", False)
             ),
             "max_wait_locked": dest_config.get("max_wait_locked", WAIT_60_SEC),
         }
@@ -303,11 +387,16 @@ class SyncApplication:
             self.logger.info(
                 f"Immediate sync files detected for destination {destination['rsync_manager'].destination}. Running rsync..."
             )
+            # Add destination to global server locks if needed
+            notification = self.notify_remote_global_server_locks(destination)
+            self.logger.debug(
+                f"Immediate added destination {destination.get('remote_hostname', None)} to global server locks. Result: {notification}"
+            )
             # ensure_excludes should be EXCLUDE_ALL + destination.get("files_to_exclude", [])
             ensure_excludes = destination.get("files_to_exclude", [])
             ensure_excludes.extend(EXCLUDE_ALL)
             rsync_result, process_result = destination["rsync_manager"].run(
-                exclude_list=EXCLUDE_ALL, include_list=files_to_sync_paths
+                exclude_list=ensure_excludes, include_list=files_to_sync_paths
             )
             if rsync_result:
                 self.logger.info(
@@ -317,14 +406,25 @@ class SyncApplication:
                 self.logger.error(
                     f"Rsync failed for destination {destination['rsync_manager'].destination}, not clearing pending files..."
                 )
+                # Remove destination from global server locks
+                notification = self.remove_remote_global_server_locks(destination)
+                self.logger.debug(
+                    f"Immediate removed destination {destination.get('remote_hostname', None)} to global server locks. Result: {notification}"
+                )
                 self.statistics_generator(
                     destination,
                     self.fs_monitor.get_regular_sync_files(destination_path),
                     self.fs_monitor.get_immediate_sync_files(destination_path),
                     sync_result=rsync_result,
+                    notification_result=notification,
                     log_type="immediate",
                 )
                 return
+            # Remove destination from global server locks
+            notification = self.remove_remote_global_server_locks(destination)
+            self.logger.debug(
+                f"Immediate removed destination {destination.get('remote_hostname', None)} to global server locks. Result: {notification}"
+            )
             # Remove these files from the immediate sync list
             for file in self.fs_monitor.get_immediate_sync_files():
                 file.synced_successfully = True
@@ -335,6 +435,7 @@ class SyncApplication:
                 self.fs_monitor.get_regular_sync_files(destination_path),
                 self.fs_monitor.get_immediate_sync_files(destination_path),
                 sync_result=rsync_result,
+                notification_result=notification,
                 log_type="regular"
             )
 
@@ -362,12 +463,11 @@ class SyncApplication:
                 if file.path not in should_exclude_paths:
                     files_to_sync.append(file.path)
 
-            # Check if we should notify of remote locks
-            webc = destination.get("web_client", None)
-            if destination.get("notify_file_locks", False):
-                # Notify remote server of locked files
-                if webc is not None:
-                    webc.add_file_to_locked_files(include)
+            # Add destination to global server locks if needed
+            notification = self.notify_remote_global_server_locks(destination)
+            self.logger.debug(
+                f"Regular added destination {destination.get('remote_hostname', None)} to global server locks. Result: {notification}"
+            )
             # ensure_excludes should be EXCLUDE_ALL + destination.get("files_to_exclude", [])
             ensure_excludes = destination.get("files_to_exclude", [])
             ensure_excludes.extend(EXCLUDE_ALL)
@@ -382,29 +482,42 @@ class SyncApplication:
                 self.logger.error(
                     f"Rsync failed for destination {destination['rsync_manager'].destination}, not clearing pending files..."
                 )
+                # Remove destination from global server locks
+                notification = self.remove_remote_global_server_locks(destination)
+                self.logger.debug(
+                    f"Regular removed destination {destination.get('remote_hostname', None)} to global server locks. Result: {notification}"
+                )
                 self.statistics_generator(
                     destination,
                     self.fs_monitor.get_regular_sync_files(destination_path),
                     self.fs_monitor.get_immediate_sync_files(destination_path),
                     sync_result=rsync_result,
+                    notification_result=notification,
                     log_type="regular",
                 )
                 return
+            # Add destination to global server locks if needed
+            notification = self.notify_remote_global_server_locks(destination)
+            self.logger.debug(
+                f"Added destination {destination.get('remote_hostname', None)} to global server locks. Result: {notification}"
+            )
             # Remove these files from the regular sync list
             for file in events:
                 file.synced_successfully = True
                 file.synced_time = time_sync_start
                 self.files_to_delete_after_sync_regular.append(file)
 
-            # Clear locked files
-            if destination.get("notify_file_locks", False):
-                if webc is not None:
-                    webc.remove_locked_files(include)
+            # Remove destination from global server locks
+            notification = self.remove_remote_global_server_locks(destination)
+            self.logger.debug(
+                f"Regular removed destination {destination.get('remote_hostname', None)} to global server locks. Result: {notification}"
+            )
             self.statistics_generator(
                 destination,
                 self.fs_monitor.get_regular_sync_files(destination_path),
                 self.fs_monitor.get_immediate_sync_files(destination_path),
                 sync_result=rsync_result,
+                notification_result=notification,
                 log_type="regular",
             )
 
@@ -439,17 +552,6 @@ class SyncApplication:
                 return
 
         destination_path = destination.get("path")
-
-        # Add destination to global server locks if needed
-        if destination.get("use_global_server_lock", False):
-            # Add destination to global server locks
-            destination.get("web_client").add_to_global_server_lock(
-                self.config_manager.get_hostname()
-            )
-            self.add_to_global_server_locks(
-                destination["rsync_manager"].destination.split("@")[1]
-            )
-
         # Check destination
         self.logger.debug(f"Checking destination: {destination}")
         # Grab extensions to ignore
@@ -489,12 +591,68 @@ class SyncApplication:
         )
         destination["locked_on_sync"] = False
 
+    def notify_remote_global_server_locks(self, destination):
+        """Notify remote server of global server locks"""
+        # Add destination to global server locks if needed
+        waited_for = ZERO
+        if destination.get("use_global_server_lock", False) and destination.get("remote_hostname", False):
+            while self.check_if_server_is_locked(destination["remote_hostname"]):
+                self.logger.debug(
+                    f"Destination {destination.get('remote_hostname', None)} is locked. Waiting..."
+                )
+                time.sleep(WAIT_60_SEC)
+                waited_for += WAIT_60_SEC
+                if waited_for >= WAIT_1H:
+                    self.logger.error(
+                        f"Destination {destination.get('remote_hostname', None)} has been locked for too long. Skipping..."
+                    )
+                    continue
+            # Add destination to global server locks
+            rdest = destination.get("web_client").add_to_global_server_lock(
+                self.config_manager.get_hostname()
+            )
+            ldest = self.add_to_global_server_locks(destination["remote_hostname"])
+            self.logger.debug(
+                f"Added destination {destination.get('remote_hostname', None)} to global server locks. Result: {rdest and ldest}"
+            )
+            return rdest and ldest
+        return False, False
+
+    def remove_remote_global_server_locks(self, destination):
+        """Remove remote server from global server locks"""
+        # Add destination to global server locks if needed
+        if destination.get("use_global_server_lock", False) and destination.get("remote_hostname", False):
+            # Add destination to global server locks with wait if locked
+            waited_for = ZERO
+            while self.check_if_server_is_locked(destination["remote_hostname"]):
+                self.logger.debug(
+                    f"Destination {destination.get('remote_hostname', None)} is locked. Waiting..."
+                )
+                time.sleep(WAIT_60_SEC)
+                waited_for += WAIT_60_SEC
+                if waited_for >= WAIT_1H:
+                    self.logger.error(
+                        f"Destination {destination.get('remote_hostname', None)} has been locked for too long. Skipping..."
+                    )
+                    break
+            # Remove destination from global server locks
+            rdest = destination.get("web_client").remove_from_global_server_lock(
+                self.config_manager.get_hostname()
+            )
+            ldest = self.remove_from_global_server_locks(destination["remote_hostname"])
+            self.logger.debug(
+                f"Removed destination {destination.get('remote_hostname', None)} from global server locks. Result: {rdest and ldest}"
+            )
+            return rdest and ldest
+        return False, False
+
     def statistics_generator(
         self,
         destination=None,
         regular_sync_files=None,
         immediate_sync_files=None,
         sync_result=False,
+        notification_result=False,
         log_type="regular",
     ):
         """Generator to get statistics for each destination"""
@@ -518,6 +676,7 @@ class SyncApplication:
             "last_sync": str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
             "last_full_sync": str(destination.get("location_last_full_sync", None)),
             "result": sync_result,
+            "notification_result": notification_result,
             "log_type": log_type,
         }
         # If we have more than 10 statistics, remove the oldest one
@@ -528,6 +687,10 @@ class SyncApplication:
     def check_locations_that_need_full_sync(self):
         """Check locations that need full sync"""
         while True:
+            # Check global server locks
+            self.logger.debug("Checking global server locks...")
+            self.check_global_server_locks()
+            self.logger.debug("Checking locations that need full sync...")
             for destination in self.destinations:
                 path = destination.get("path")
                 if destination.get("location_last_full_sync") is None:
@@ -535,6 +698,11 @@ class SyncApplication:
                         f"Location {path} has not been synced. Running full sync..."
                     )
                     ensure_excludes = destination.get("files_to_exclude", None)
+                    # Add destination to global server locks if needed
+                    notification = self.notify_remote_global_server_locks(destination)
+                    self.logger.debug(
+                        f"Added destination {destination.get('remote_hostname', None)} to global server locks. Result: {notification}"
+                    )
                     destination["rsync_manager"].run(
                         exclude_list=ensure_excludes
                         )
@@ -546,11 +714,21 @@ class SyncApplication:
                     time_diff = current_time - last_full_sync
                     full_sync_interval = destination.get("full_sync_interval", DEFAULT_FULL_SYNC)
                     if time_diff.total_seconds() / 60 >= full_sync_interval:
+                        # Remove destination from global server locks
+                        notification = self.remove_remote_global_server_locks(destination)
+                        self.logger.debug(
+                            f"Removed destination {destination.get('remote_hostname', None)} to global server locks. Result: {notification}"
+                        )
                         self.logger.debug(
                             f"Location {path} has not been synced in over {full_sync_interval} minutes. Running full sync..."
                         )
                         destination["rsync_manager"].run(exclude_list=ensure_excludes)
                         destination["location_last_full_sync"] = current_time
+                # Remove destination from global server locks
+                notification = self.remove_remote_global_server_locks(destination)
+                self.logger.debug(
+                    f"Removed destination {destination.get('remote_hostname', None)} to global server locks. Result: {notification}"
+                )
             self.logger.debug(
                 f"Sleeping for {CHECK_THREADS_SLEEP} seconds before checking locations that need full sync..."
             )

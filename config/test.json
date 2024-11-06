@@ -17,6 +17,8 @@
             "notify_file_locks": true,
             "control_server_secret": "secret",
             "control_server_port": 8080,
+            "remote_hostname": "client",
+            "control_server_host": "0.0.0.0",
             "path": "/root/source",
             "full_sync_interval": 30,
             "warning_file_open_time": 86400,

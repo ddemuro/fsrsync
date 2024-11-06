@@ -1,17 +1,26 @@
 """Library to make GET and POST requests to the web server."""
 import requests
-from requests.exceptions import ConnectionError, RequestException
 from .constants import DEFAULT_HTTP_TIMEOUT
+from requests.exceptions import ConnectionError, RequestException
+
 
 class WebClient:
     """Library to make GET and POST requests to the web server."""
 
-    def __init__(self, host, port, secret, logger=None):
+    def __init__(self, host, port, secret, use_locks=False, logger=None):
         """Initialize the web client"""
         self.host = host
         self.port = port
         self.secret = secret
         self.logger = logger
+        self.use_locks = use_locks
+        if self.use_locks:
+            if self.host == "":
+                raise ValueError("Host cannot be empty")
+            if self.port == "":
+                raise ValueError("Port cannot be empty")
+            if self.secret == "":
+                raise ValueError("Secret cannot be empty")
 
     def log(self, message):
         """Log a message"""

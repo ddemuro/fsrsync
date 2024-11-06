@@ -1,5 +1,6 @@
 import time
 from .logs import Logger
+from .utils import fix_path_slashes
 from inotify_simple import INotify, flags
 
 
@@ -17,6 +18,7 @@ EVENT_MAP = {
     "IN_ATTRIB": flags.ATTRIB,
     "IN_CLOSE_NOWRITE": flags.CLOSE_NOWRITE,
     "IN_CLOSE_WRITE": flags.CLOSE_WRITE,
+    "IN_ISDIR": flags.ISDIR
 }
 
 
@@ -24,8 +26,13 @@ class File:
     """Class to represent a locked file"""
 
     def __init__(self, path, logger):
-        self.path = path
-        self.extension = path.split(".")[-1]
+        """Initialize the file with a path"""
+        if not path:
+            raise ValueError("Path cannot be empty, this is a bug")
+        self.path = fix_path_slashes(path)
+        # Get the extension if it exists
+        if "." in path:
+            self.extension = path.split(".")[-1]
         self.logger = logger
         self.start_time = time.time()
         self.successfully_synced = False
@@ -95,10 +102,12 @@ class FilesystemMonitor:
         self.log_files_opened_for_too_long()
 
         if event_mask & EVENT_MAP["IN_CREATE"]:
-            self.logger.debug(f"File created: {full_path}")
-            # Optionally: skip adding this to syncs immediately
+            self.logger.debug(f"File created: {full_path}, added to immediate sync")
+            self.add_immediate_sync_file(File(full_path, self.logger))
+            return
 
-        if event_mask & EVENT_MAP["IN_OPEN"] and filename != "":
+        # If IN_OPEN and not ISDIR, add to locked files
+        if event_mask & EVENT_MAP["IN_OPEN"] and not event_mask & EVENT_MAP["IN_ISDIR"]:
             self.logger.debug(f"File opened: {full_path}")
             self.add_to_locked_files(File(full_path, self.logger))
             return
