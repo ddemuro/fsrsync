@@ -85,18 +85,21 @@ class SyncApplication:
     def __init__(self, config_file, full_sync=False):
         """Initialize the application with a configuration file"""
         self.config_manager = ConfigurationManager(config_file)
+        self.config_manager.get_instance(config_file).load()
+        self.logs = self.config_manager.get_instance(config_file).config.get(
+            "logs", DEFAULT_LOGS
+        )
+        self.logger = Logger(filename=self.logs)
         self.fs_monitor = FilesystemMonitor()
         self.remote_hosts = []
         self.destinations = []
         self.files_to_delete_after_sync_regular = []
         self.files_to_delete_after_sync_immediate = []
         self.syncs_running_currently = []
-        self.config_manager.get_instance(config_file).load()
         self.hostname = self.config_manager.get_instance(config_file).get_hostname()
         self.logs = self.config_manager.get_instance(config_file).config.get(
             "logs", DEFAULT_LOGS
         )
-        self.logger = Logger(filename=self.logs)
         # Initialize global server locks
         self.global_server_locks = [ServerLocker(server_name=self.hostname,
                                                  is_self=True,
