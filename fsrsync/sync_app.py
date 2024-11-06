@@ -745,25 +745,18 @@ class SyncApplication:
                         f"Location {path} has not been synced. Running full sync..."
                     )
                     ensure_excludes = destination.get("files_to_exclude", None)
-                    # Add destination to global server locks if needed
-                    notification = self.notify_remote_global_server_locks(destination)
-                    if not notification:
-                        self.logger.error(
-                            f"Could not run full sync for destination {destination.get('remote_hostname', None)} to global server locks. Skipping full sync..."
-                        )
-                        self.statistics_generator(
-                            destination,
-                            self.fs_monitor.get_regular_sync_files(path),
-                            self.fs_monitor.get_immediate_sync_files(path),
-                            sync_result=False,
-                            notification_result=notification,
-                            log_type="full",
-                        )
-                        continue
-                    destination["rsync_manager"].run(
+                    sync_result = destination["rsync_manager"].run(
                         exclude_list=ensure_excludes
                         )
                     destination["location_last_full_sync"] = datetime.datetime.now()
+                    self.statistics_generator(
+                        destination,
+                        self.fs_monitor.get_regular_sync_files(path),
+                        self.fs_monitor.get_immediate_sync_files(path),
+                        sync_result=sync_result,
+                        notification_result=None,
+                        log_type="full",
+                    )
                 else:
                     # Check if we need to run a full sync
                     last_full_sync = destination.get("location_last_full_sync")
