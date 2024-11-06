@@ -112,9 +112,14 @@ def is_file_open(file_path):
 
 def fix_path_slashes(path):
     """Fix path slashes"""
-    if path[-1] != "/":
-        path += "/"
-    # If // is detected replace with /
+    # Check if it's a folder or file using os.path.isdir if it's a folder finish with / if it's a file remove /
+    if os.path.isdir(path):
+        if path[-1] != "/":
+            path += "/"
+    else:
+        if path[-1] == "/":
+            path = path[:-1]
+    # Ensure we never ship a path with double slashes
     if "//" in path:
         path = path.replace("//", "/")
     return path
