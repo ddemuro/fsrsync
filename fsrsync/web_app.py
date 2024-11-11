@@ -52,7 +52,8 @@ class WebControl:
             raise HTTPException(status_code=401, detail="Unauthorized")
         request_body = await request.json()
         server = request_body.get("server")
-        result = instance.sync_state.add_to_global_server_locks(server)
+        path = request_body.get("path", None)
+        result = instance.sync_state.add_to_global_server_locks(server, path)
         return {"status": result}
 
     # Post to remove a string to remove_from_global_server_locks in instance.sync_state.remove_from_global_server_locks format of post {"server": "server_name"}
@@ -64,7 +65,8 @@ class WebControl:
             raise HTTPException(status_code=401, detail="Unauthorized")
         request_body = await request.json()
         server = request_body.get("server")
-        result = instance.sync_state.remove_from_global_server_locks(server)
+        path = request_body.get("path", None)
+        result = instance.sync_state.remove_from_global_server_locks(server, path)
         return {"status": result}
 
     @app.post("/check_if_server_locked")
