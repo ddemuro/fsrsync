@@ -89,7 +89,7 @@ def validate_path(path):
 
 
 def is_file_open(file_path):
-    """ Check if a file is open by any process
+    """Check if a file is open by any process.
 
     :param file_path: The path to the file
     :type file_path: str
@@ -97,14 +97,16 @@ def is_file_open(file_path):
     :rtype: bool
     """
     try:
-        for proc in psutil.process_iter():
+        for proc in psutil.process_iter(['pid', 'open_files']):
             try:
-                if file_path in [f.path for f in proc.open_files()]:
-                    return True  # File is open by this process
+                if any(f.path == file_path for f in proc.info['open_files'] or []):
+                    return True
+            except (psutil.AccessDenied, psutil.NoSuchProcess):
+                pass  # Ignore processes that cannot be accessed or no longer exist
             except Exception as e:
-                pass  # Ignore errors
+                print(f"Unexpected error while checking process {proc.pid}: {e}")
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Error while iterating processes: {e}")
 
     return False  # File not open
 
