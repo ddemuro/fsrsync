@@ -101,7 +101,7 @@ def is_file_open(file_path):
             try:
                 if file_path in [f.path for f in proc.open_files()]:
                     return True  # File is open by this process
-            except (psutil.NoSuchFile, psutil.AccessDenied, psutil.Error):
+            except Exception as e:
                 pass  # Ignore errors
     except Exception as e:
         print(f"Error: {e}")
