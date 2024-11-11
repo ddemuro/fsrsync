@@ -562,18 +562,24 @@ class SyncApplication:
         extensions_to_ignore = destination.get("extensions_to_ignore", [])
         self.logger.debug(f"Extensions to ignore: {extensions_to_ignore}")
         # Remove files with those extensions from the regular sync list and immediate sync list
+        files_to_remove = []
         for file in self.fs_monitor.get_regular_sync_files(destination_path):
             if file.extension in extensions_to_ignore:
                 self.logger.debug(
                     f"Removing file {file.path} from regular sync as it has an extension to ignore"
                 )
-                self.fs_monitor.delete_regular_sync_file(file.path)
+                files_to_remove.append(file)
+        for file in files_to_remove:
+            self.fs_monitor.delete_regular_sync_file(file.path)
+        files_to_remove = []
         for file in self.fs_monitor.get_immediate_sync_files(destination_path):
             if file.extension in extensions_to_ignore:
                 self.logger.debug(
                     f"Removing file {file.path} from immediate sync as it has an extension to ignore"
                 )
-                self.fs_monitor.delete_immediate_sync_file(file)
+                files_to_remove.append(file)
+        for file in files_to_remove:
+            self.fs_monitor.delete_immediate_sync_file(file.path)
 
         destination["locked_on_sync"] = True
         time_started = time.time()
