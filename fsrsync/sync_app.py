@@ -244,6 +244,9 @@ class SyncApplication:
                     # Call self.manage_destination_event(destination) in a separate thread
                     # Check if destination is locked, don't run if it is
                     if not destination.get("locked_on_sync"):
+                        self.logger.debug(
+                            f"Starting thread for destination: {destination['rsync_manager'].destination}"
+                        )
                         thread = threading.Thread(
                             target=self.manage_destination_event, args=(destination,)
                         )
@@ -252,7 +255,8 @@ class SyncApplication:
                 # Wait for all threads to finish
                 for thread in threads:
                     thread.join()
-
+                # All threads are back
+                self.logger.debug("All threads have finished")
                 # Clean all files that need to be deleted after sync
                 deleted_files_reg, deleted_files_imm = [], []
                 for file in self.files_to_delete_after_sync_regular:
@@ -269,6 +273,7 @@ class SyncApplication:
                     self.files_to_delete_after_sync_regular.remove(file)
                 for file in deleted_files_imm:
                     self.files_to_delete_after_sync_immediate.remove(file)
+                self.logger.debug("All files have been deleted after sync")
 
     def setup_destination(self, dest_config):
         """Set up a destination with an rsync manager and inotify watcher"""
@@ -570,6 +575,7 @@ class SyncApplication:
                 )
                 files_to_remove.append(file)
         for file in files_to_remove:
+            destination.get("web_client").delete_file_pending_for_path(file.path)
             self.fs_monitor.delete_regular_sync_file(file.path)
         files_to_remove = []
         for file in self.fs_monitor.get_immediate_sync_files(destination_path):
@@ -580,6 +586,7 @@ class SyncApplication:
                 files_to_remove.append(file)
         for file in files_to_remove:
             self.fs_monitor.delete_immediate_sync_file(file.path)
+            destination.get("web_client").delete_file_pending_for_path(file.path)
 
         destination["locked_on_sync"] = True
         time_started = time.time()

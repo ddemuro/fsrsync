@@ -185,7 +185,11 @@ class FilesystemMonitor:
 
     def get_locked_files_for_path(self, path):
         """Return locked files in a given path"""
-        return [file for file in self.open_files if file.path.startswith(path)]
+        locked_files = []
+        for file in self.open_files:
+            if file.path.startswith(path):
+                locked_files.append(file)
+        return locked_files
 
     def get_locked_files(self):
         """Return locked files"""
@@ -193,13 +197,12 @@ class FilesystemMonitor:
 
     def get_immediate_sync_files(self, path_filter=None):
         """Return files that need immediate sync"""
-        if path_filter:
-            return [file for file in self.immediate_sync if file.path.startswith(path_filter)]
-        return self.immediate_sync
-
-    def get_immediate_sync_files_for_path(self, path):
-        """Return files that need immediate sync in a given path"""
-        return [file for file in self.immediate_sync if file.startswith(path)]
+        imm_sync = []
+        for f in self.immediate_sync:
+            if path_filter:
+                if f.path.startswith(path_filter):
+                    imm_sync.append(f)
+        return imm_sync
 
     def clear_immediate_sync_files(self):
         """Clear files that need immediate sync"""
@@ -238,19 +241,22 @@ class FilesystemMonitor:
 
     def get_regular_sync_files(self, path_filter=None):
         """Return files that need regular sync"""
-        if path_filter:
-            return [file for file in self.regular_sync if file.path.startswith(path_filter)]
-        return self.regular_sync
-
-    def get_regular_sync_files_for_path(self, path):
-        """Return files that need regular sync in a given path"""
-        return [file for file in self.regular_sync if file.path.startswith(path)]
+        reg_sync = []
+        for f in self.regular_sync:
+            if path_filter:
+                if f.path.startswith(path_filter):
+                    reg_sync.append(f)
+        return reg_sync
 
     def clear_regular_sync_files(self, path_filter=None):
         """Clear files that need regular sync"""
         if path_filter:
-            self.regular_sync = {
-                f for f in self.regular_sync if not f.path.startswith(path_filter)}
+            files_to_clear = []
+            for f in self.regular_sync:
+                if f.path.startswith(path_filter):
+                    files_to_clear.append(f)
+            for f in files_to_clear:
+                self.regular_sync.discard(f)
         else:
             self.regular_sync.clear()
 
@@ -261,6 +267,7 @@ class FilesystemMonitor:
 
     def delete_regular_sync_files_for_path(self, path, delete_up_to_time=None):
         """Delete files that need regular sync in a given path"""
+        self.logger.debug(f"Deleting files in {path} from regular sync, with delete_up_to_time={delete_up_to_time}")
         to_remove = []
         for f in self.regular_sync:
             if f.path.startswith(path):
@@ -274,12 +281,15 @@ class FilesystemMonitor:
 
     def delete_immediate_sync_files_for_path(self, path, delete_up_to_time=None):
         """Delete files that need immediate sync in a given path"""
+        self.logger.debug(f"Deleting files in {path} from immediate sync, with delete_up_to_time={delete_up_to_time}")
         to_remove = []
         for f in self.immediate_sync:
             if f.path.startswith(path):
                 if delete_up_to_time is None:
+                    self.logger.debug(f"File {f} has no delete_up_to_time")
                     to_remove.append(f)
                 elif f.start_time < delete_up_to_time:
+                    self.logger.debug(f"File {f} has start time {f.start_time} and delete_up_to_time {delete_up_to_time}")
                     to_remove.append(f)
         for f in to_remove:
             self.immediate_sync.discard(f)
@@ -287,12 +297,15 @@ class FilesystemMonitor:
 
     def delete_regular_sync_file(self, path, delete_up_to_time=None):
         """Delete file from regular sync"""
+        self.logger.debug(f"Deleting file {path} from regular sync, with delete_up_to_time={delete_up_to_time}")
         to_remove = []
         for f in self.regular_sync:
             if f.path == path:
                 if delete_up_to_time is None:
+                    self.logger.debug(f"File {f} has no delete_up_to_time")
                     to_remove.append(f)
                 elif f.start_time < delete_up_to_time:
+                    self.logger.debug(f"File {f} has start time {f.start_time} and delete_up_to_time {delete_up_to_time}")
                     to_remove.append(f)
         for f in to_remove:
             self.regular_sync.discard(f)
@@ -303,6 +316,7 @@ class FilesystemMonitor:
         # Return if file already exists
         for f in self.regular_sync:
             if f.path == file.path:
+                self.logger.debug(f"File {file} already in regular sync")
                 return
         self.regular_sync.add(file)
         self.logger.debug(f"File {file} added to regular sync")
@@ -312,6 +326,7 @@ class FilesystemMonitor:
         # Check if path already in immediate sync files
         for f in self.immediate_sync:
             if f.path == file.path:
+                self.logger.debug(f"File {file} already in immediate sync")
                 return
         self.immediate_sync.add(file)
         self.logger.debug(f"File {file} added to immediate sync")
@@ -321,15 +336,16 @@ class FilesystemMonitor:
         # Return if file already exists
         for f in self.open_files:
             if f.path == file.path:
+                self.logger.debug(f"File {file} already in locked files")
                 return
         self.open_files.add(file)
         self.logger.debug(f"File {file} added to locked files")
 
     def get_all_events_for_path(self, path):
         """Return all events for a given path"""
-        return self.get_immediate_sync_files_for_path(
+        return self.get_immediate_sync_files(
             path
-        ) + self.get_regular_sync_files_for_path(path)
+        ) + self.get_regular_sync_files(path)
 
     def clear_all_sync_files(self):
         """Clear all files that need sync"""
