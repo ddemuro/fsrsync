@@ -589,6 +589,11 @@ class SyncApplication:
         notify_server_locks = destination.get("notify_file_locks", False)
         remote_hostname = destination.get("remote_hostname", None)
         self.logger.debug(f"Adding remote global server locks for {destination}, use_gsl: {use_gsl}, notify_server_locks: {notify_server_locks}, remote_hostname: {remote_hostname}")
+        if not use_gsl:
+            self.logger.debug(
+                f"Destination {destination.get('remote_hostname', None)} does not use global server locks. Continuing..."
+            )
+            return True
         if use_gsl and remote_hostname is not None and notify_server_locks:
             while self.check_if_server_is_locked(remote_hostname):
                 self.logger.debug(
