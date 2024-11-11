@@ -6,5 +6,6 @@
     "control_server_secret": "secret",
     "full_sync_interval": 30,
     "use_global_server_lock": true,
+    "time_event_delay": 5,
     "destinations": []
 }

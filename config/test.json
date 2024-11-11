@@ -6,6 +6,7 @@
     "control_server_secret": "secret",
     "use_global_server_lock": true,
     "notify_file_locks": true,
+    "time_event_delay": 5,
     "destinations": [
         {
             "destination": "root@client",

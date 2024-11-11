@@ -50,7 +50,7 @@ class FilesystemMonitor:
     """Class to monitor filesystem events using inotify"""
     warning_file_open_time = 86400
 
-    def __init__(self):
+    def __init__(self, time_between_events=5):
         """Initialize the filesystem monitor"""
         self.inotify_watcher = INotify()
         self.watches = {}  # Keep track of paths being watched
@@ -58,6 +58,7 @@ class FilesystemMonitor:
         self.immediate_sync = set()  # Track files that need immediate sync
         self.regular_sync = set()  # Track files that need regular sync
         self.logger = Logger()
+        self.time_between_events = time_between_events  # Time between events in seconds
 
     def get_aggregated_events(self):
         """Return all events"""
@@ -80,7 +81,8 @@ class FilesystemMonitor:
     def event_generator(self):
         """Generator to yield filesystem events"""
         while True:
-            events = self.inotify_watcher.read(timeout=1000, read_delay=100)
+            events = self.inotify_watcher.read(timeout=5000,
+                                               read_delay=self.time_between_events)
             for event in events:
                 yield event
 
@@ -98,31 +100,6 @@ class FilesystemMonitor:
         full_path = f"{path}/{filename}" if filename else path
         full_path = fix_path_slashes(full_path)
 
-        self.logger.info(f"Event detected: {type_names} on {full_path}")
-
-        self.log_files_opened_for_too_long()
-        self.check_if_file_still_locked()
-
-        if event_mask & EVENT_MAP["IN_CREATE"]:
-            self.logger.debug(f"File created: {full_path}, added to immediate sync")
-            self.add_immediate_sync_file(File(full_path, self.logger))
-            return
-
-        # If IN_OPEN and not ISDIR, add to locked files
-        if event_mask & EVENT_MAP["IN_OPEN"] and not event_mask & EVENT_MAP["IN_ISDIR"]:
-            self.logger.debug(f"File opened: {full_path}")
-            self.add_to_locked_files(File(full_path, self.logger))
-            return
-
-        # File closed
-        FILE_CLOSED_EVENTS = ["IN_CLOSE_WRITE", "IN_CLOSE_NOWRITE"]
-        if any(event_mask & EVENT_MAP[event] for event in FILE_CLOSED_EVENTS):
-            if full_path in self.open_files:
-                self.logger.debug(f"File closed: {full_path}")
-                self.delete_locked_file(full_path)
-                self.add_immediate_sync_file(File(full_path, self.logger))
-                return
-
         # All other events
         ALL_OTHER_EVENTS = [
             "IN_ACCESS",
@@ -135,9 +112,34 @@ class FilesystemMonitor:
             "IN_ATTRIB",
             "IN_CLOSE_NOWRITE",
         ]
+
+        # Remove noise of "OPEN" events
+        if any(event_mask & EVENT_MAP[event] for event in ALL_OTHER_EVENTS):
+            self.logger.info(f"Event detected: {type_names} on {full_path}")
+
+        if event_mask & EVENT_MAP["IN_CREATE"]:
+            self.logger.debug(f"File created: {full_path}, added to immediate sync")
+            self.add_immediate_sync_file(File(full_path, self.logger))
+
+        # If IN_OPEN and not ISDIR, add to locked files
+        if event_mask & EVENT_MAP["IN_OPEN"] and not event_mask & EVENT_MAP["IN_ISDIR"]:
+            self.logger.debug(f"File opened: {full_path}")
+            self.add_to_locked_files(File(full_path, self.logger))
+
+        # File closed
+        FILE_CLOSED_EVENTS = ["IN_CLOSE_WRITE", "IN_CLOSE_NOWRITE"]
+        if any(event_mask & EVENT_MAP[event] for event in FILE_CLOSED_EVENTS):
+            if full_path in self.open_files:
+                self.logger.debug(f"File closed: {full_path}")
+                self.delete_locked_file(full_path)
+                self.add_immediate_sync_file(File(full_path, self.logger))
+
         if any(event_mask & EVENT_MAP[event] for event in ALL_OTHER_EVENTS):
             self.logger.debug(f"File modified: {full_path}")
             self.add_regular_sync_file(File(full_path, self.logger))
+
+        self.log_files_opened_for_too_long()
+        self.check_if_file_still_locked()
 
     def log_files_opened_for_too_long(self):
         """Log files that have been locked for too long"""

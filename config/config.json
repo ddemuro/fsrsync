@@ -6,6 +6,7 @@
     "control_server_secret": "secret",
     "max_stats": 100,
     "max_server_lock_time": 60,
+    "time_event_delay": 5,
     "destinations": [
         {
             "destination": "user1@remote",

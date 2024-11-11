@@ -136,32 +136,32 @@ class RsyncManager:
                     return False, False
 
         # Pre-set options from the configuration file
-        options = f"{self.options} --stats"
+        opts = f"{self.options} --stats"
 
         # Add SSH key and port options if provided
         if self.ssh_key and self.ssh_port:
-            options += f" -e 'ssh -i {self.ssh_key} -p {self.ssh_port}'"
+            opts += f" -e 'ssh -i {self.ssh_key} -p {self.ssh_port}'"
         # Add SSH port option if provided
         if self.ssh_port:
-            options += f" -e 'ssh -p {self.ssh_port}'"
+            opts += f" -e 'ssh -p {self.ssh_port}'"
         # Add SSH key option if provided
         if self.ssh_key:
-            options += f" -e 'ssh -i {self.ssh_key}'"
+            opts += f" -e 'ssh -i {self.ssh_key}'"
         if exclude_list:
-            options += f" --exclude={self.format_option(exclude_list)}"
+            opts += f" --exclude={self.format_option(exclude_list)}"
         if include_list:
-            options += f" --include={self.format_option(include_list)}"
+            opts += f" --include={self.format_option(include_list)}"
         # Construct rsync command
         # If include_list is provided, use it to sync only the specified files
         if include_list:
             rsync_command = (
-                f"rsync {options} {self.path} {self.destination}:{self.destination_path}"
+                f"rsync {opts} {self.path} {self.destination}:{self.destination_path}"
             )
             self.logger.info(
                 f"Only syncing files in include list: {include_list}, rsync command: {rsync_command}"
             )
         else:
-            rsync_command = f"rsync {options} {self.path} {self.destination}:{self.destination_path}"
+            rsync_command = f"rsync {opts} {self.path} {self.destination}:{self.destination_path}"
             self.logger.info(f"Running regular rsync command: {rsync_command}")
         rsync_success, exit_code, stdout, stderr = run_command(rsync_command)
         if stdout:
@@ -223,6 +223,9 @@ class RsyncManager:
                         f"Post-sync checkexit command failed with exit code {exit_code}: {stdout} {stderr}"
                     )
                     return rsync_success, False
+
+        exclude_list = []
+        include_list = []
 
         # Return the success status of the rsync command
         return rsync_success, True

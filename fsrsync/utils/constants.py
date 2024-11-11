@@ -15,3 +15,4 @@ DEFAULT_WEB_SERVER_PORT = 8080  # Default web server port
 DEFAULT_SSH_PORT = 22  # Default SSH port
 DEFAULT_LOGS = "/var/log/fsrsync.log"  # Default log file
 MAX_LOG_SIZE = 100 * 1024 * 1024  # 100 MB
+TIME_EVENT_DELAY = 5  # 5 seconds

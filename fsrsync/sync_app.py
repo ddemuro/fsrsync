@@ -24,6 +24,7 @@ from .utils.constants import (
     DEFAULT_SSH_PORT,
     DEFAULT_WEB_SERVER_PORT,
     DEFAULT_LOGS,
+    TIME_EVENT_DELAY
 )
 
 
@@ -93,17 +94,21 @@ class SyncApplication:
             "logs", DEFAULT_LOGS
         )
         self.logger = Logger(filename=self.logs)
-        self.fs_monitor = FilesystemMonitor()
         self.remote_hosts = []
         self.destinations = []
         self.files_to_delete_after_sync_regular = []
         self.files_to_delete_after_sync_immediate = []
         self.syncs_running_currently = []
         self.hostname = self.config_manager.get_instance(config_file).get_hostname()
+        self.time_event_delay = self.config_manager.get_instance(config_file).config.get(
+            "time_event_delay", TIME_EVENT_DELAY
+        )
         self.logs = self.config_manager.get_instance(config_file).config.get(
             "logs", DEFAULT_LOGS
         )
         # Initialize global server locks
+        self.fs_monitor = FilesystemMonitor(
+            time_between_events=self.time_event_delay)
         self.global_server_locks = [ServerLocker(server_name=self.hostname,
                                                  is_self=True,
                                                  logger=self.logger)]
