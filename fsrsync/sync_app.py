@@ -119,7 +119,6 @@ class SyncApplication:
         )
         # Set up Sentry for error logging
         setup_sentry(
-            self.logger,
             self.config_manager.get_instance(config_file).config.get(
                 "SENTRY_DSN", None
             ),

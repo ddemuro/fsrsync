@@ -1,10 +1,11 @@
+import logging
 import sentry_sdk
 from sentry_sdk.integrations.logging import LoggingIntegration
 
 DEFAULT_SENTRY_DSN = "https://18899450e45e41d5d685301c5159d434@sentry.takelan.com/33"
 
 
-def setup_sentry(logging, sentry_dsn, max_breadcrumbs=100, max_value_length=1000):
+def setup_sentry(sentry_dsn, max_breadcrumbs=100, max_value_length=1000):
     """Set up Sentry for error logging"""
     # If SENTRY_DSN is not set, use the default DSN
     if not sentry_dsn or sentry_dsn == "":
