@@ -187,7 +187,10 @@ class FilesystemMonitor:
         """Return locked files in a given path"""
         locked_files = []
         for file in self.open_files:
-            if file.path.startswith(path):
+            if path:
+                if file.path.startswith(path):
+                    locked_files.append(file)
+            else:
                 locked_files.append(file)
         return locked_files
 
@@ -202,6 +205,8 @@ class FilesystemMonitor:
             if path_filter:
                 if f.path.startswith(path_filter):
                     imm_sync.append(f)
+            else:
+                imm_sync.append(f)
         return imm_sync
 
     def clear_immediate_sync_files(self):
@@ -246,6 +251,8 @@ class FilesystemMonitor:
             if path_filter:
                 if f.path.startswith(path_filter):
                     reg_sync.append(f)
+            else:
+                reg_sync.append(f)
         return reg_sync
 
     def clear_regular_sync_files(self, path_filter=None):
@@ -253,7 +260,10 @@ class FilesystemMonitor:
         if path_filter:
             files_to_clear = []
             for f in self.regular_sync:
-                if f.path.startswith(path_filter):
+                if path_filter:
+                    if f.path.startswith(path_filter):
+                        files_to_clear.append(f)
+                else:
                     files_to_clear.append(f)
             for f in files_to_clear:
                 self.regular_sync.discard(f)
