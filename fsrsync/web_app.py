@@ -95,6 +95,17 @@ class WebControl:
             raise HTTPException(status_code=401, detail="Unauthorized")
         return instance.sync_state.fs_monitor.get_immediate_sync_files()
 
+    @app.post("/delete_file_pending_for_path")
+    async def delete_file_pending_for_path(request: Request):  # pylint: disable=no-self-argument
+        """Delete file pending for path"""
+        instance = WebControl._instance
+        if not instance.check_if_secret_in_header(request.headers):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        request_body = await request.json()
+        path = request_body.get("path")
+        result = instance.sync_state.fs_monitor.delete_fs_event_for_path(path)
+        return {"status": result}
+
     @app.get("/locked_files")
     async def locked_files(request: Request):  # pylint: disable=no-self-argument
         """Get locked files"""

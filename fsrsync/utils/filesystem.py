@@ -241,6 +241,11 @@ class FilesystemMonitor:
         else:
             self.regular_sync.clear()
 
+    def delete_fs_event_for_path(self, path):
+        """Delete filesystem events for a given path"""
+        self.delete_regular_sync_files_for_path(path)
+        self.delete_immediate_sync_files_for_path(path)
+
     def delete_regular_sync_files_for_path(self, path, delete_up_to_time=None):
         """Delete files that need regular sync in a given path"""
         to_remove = []

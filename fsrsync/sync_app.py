@@ -430,6 +430,7 @@ class SyncApplication:
                 file.synced_successfully = True
                 file.synced_time = time_sync_start
                 self.files_to_delete_after_sync_immediate.append(file)
+                destination.get("web_client").delete_file_pending_for_path(file.path)
             self.statistics_generator(
                 destination,
                 self.fs_monitor.get_regular_sync_files(destination_path),
@@ -510,6 +511,7 @@ class SyncApplication:
                 file.synced_successfully = True
                 file.synced_time = time_sync_start
                 self.files_to_delete_after_sync_regular.append(file)
+                destination.get("web_client").delete_file_pending_for_path(file.path)
 
     def manage_destination_event(self, destination):
         """Manage events for a destination"""
