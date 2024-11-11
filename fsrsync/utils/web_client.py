@@ -71,13 +71,20 @@ class WebClient:
         """Delete a file pending for a path"""
         return self.post("/delete_file_pending_for_path", {"path": path})
 
+    def check_if_server_locked(self, server, path=None):
+        """Check if a server is locked"""
+        return self.post("/check_if_server_locked", {"server": server,
+                                                     "path": path})
+
     def add_to_global_server_lock(self, server, path=None):
         """Add a server to the global server lock"""
-        return self.post("/add_to_global_server_lock", {"server": server, "path": path})
+        return self.post("/add_to_global_server_lock", {"server": server,
+                                                        "path": path})
 
     def remove_from_global_server_lock(self, server, path=None):
         """Remove a server from the global server lock"""
-        return self.post("/remove_from_global_server_lock", {"server": server, "path": path})
+        return self.post("/remove_from_global_server_lock", {"server": server,
+                                                             "path": path})
 
     def remove_locked_files(self, files):
         """Remove a file from the locked files"""

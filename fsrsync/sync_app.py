@@ -49,21 +49,22 @@ class ServerLocker:
             return
         return self.log.info(message)
 
-    def lock(self, server_name):
+    def lock(self, server_name, path=None):
         """Lock the server"""
         if self.locked:
             self.logger(f"Server {self.server_name} is already locked")
             return False
         self.locked = True
+        self.path = path
         self.server_initiated_lock = server_name
         self.locked_date = datetime.datetime.now()
         self.logger(f"Lock for server {self.server_name} has been initiated")
         return True
 
-    def unlock(self, server_name):
+    def unlock(self, server_name, path=None):
         """Unlock the server"""
         # Check if we're using path
-        if self.locked and self.server_initiated_lock == server_name:
+        if self.locked and self.server_initiated_lock == server_name and self.path == path:
             self.locked = False
             self.locked_date = None
             self.logger(f"Lock for server {self.server_name} has been removed")
@@ -138,12 +139,13 @@ class SyncApplication:
         for server_lock in self.global_server_locks:
             if server_lock.server_name == server and server_lock.path == path:
                 find_server = server_lock
-                result = find_server.lock(self.hostname)
+                result = find_server.lock(self.hostname, path)
                 self.logger.info(f"Added lock for server {server} path: {path}, result: {result}")
                 return result
         if find_server is None:
-            find_server = ServerLocker(server_name=server, logger=self.logger, path=path)
-            find_server.lock(self.hostname)
+            find_server = ServerLocker(server_name=server, logger=self.logger,
+                                       path=path)
+            find_server.lock(self.hostname, path)
             self.global_server_locks.append(find_server)
             self.logger.info(f"Added lock for server {server} to path: {path}")
         return True
@@ -155,7 +157,7 @@ class SyncApplication:
         for server_lock in self.global_server_locks:
             if server_lock.server_name == server and server_lock.path == path:
                 find_server = server_lock
-                result = find_server.unlock(self.hostname)
+                result = find_server.unlock(self.hostname, path)
                 self.logger.info(f"Removed lock for server {server} path: {path}, result: {result}")
                 return result
         return True
@@ -592,38 +594,39 @@ class SyncApplication:
         use_gsl = destination.get("use_global_server_lock", False)
         notify_server_locks = destination.get("notify_file_locks", False)
         remote_hostname = destination.get("remote_hostname", None)
+        path = destination.get("path", None)
         self.logger.debug(f"Adding remote global server locks for {destination}, use_gsl: {use_gsl}, notify_server_locks: {notify_server_locks}, remote_hostname: {remote_hostname}")
         if not use_gsl:
             self.logger.debug(
-                f"Destination {destination.get('remote_hostname', None)} does not use global server locks. Continuing..."
+                f"Destination {remote_hostname} does not use global server locks. Continuing..."
             )
             return True
         if use_gsl and remote_hostname is not None and notify_server_locks:
             while self.check_if_server_is_locked(remote_hostname):
                 self.logger.debug(
-                    f"Destination {destination.get('remote_hostname', None)} is locked. Waiting..."
+                    f"Destination {remote_hostname} is locked. Waiting..."
                 )
                 time.sleep(WAIT_60_SEC)
                 waited_for += WAIT_60_SEC
                 if waited_for >= WAIT_1H:
-                    still_locked = destination.get("web_client").check_if_server_is_locked(remote_hostname, destination.get("path", None))
+                    still_locked = destination.get("web_client").check_if_server_locked(remote_hostname, path)
                     if not still_locked.get("result", False):
                         self.logger.debug(
-                            f"Destination {destination.get('remote_hostname', None)} no longer locked. Continuing..."
+                            f"Destination {remote_hostname} no longer locked. Continuing..."
                         )
-                        self.remove_from_global_server_locks(remote_hostname, destination.get("path", None))
+                        self.remove_from_global_server_locks(remote_hostname, path)
                         break
                     self.logger.error(
-                        f"Destination {destination.get('remote_hostname', None)} has been locked for too long. Skipping..."
+                        f"Destination {remote_hostname} has been locked for too long. Skipping..."
                     )
                     continue
             # Add destination to global server locks
             rdest = destination.get("web_client").add_to_global_server_lock(
-                self.config_manager.get_hostname(), destination.get("path", None)
+                self.config_manager.get_hostname(), path
             )
-            ldest = self.add_to_global_server_locks(remote_hostname, destination.get("path", None))
+            ldest = self.add_to_global_server_locks(remote_hostname, path)
             self.logger.debug(
-                f"Added destination {destination.get('remote_hostname', None)} to global server locks. Result: RDST: {rdest} and LDST: {ldest}"
+                f"Added destination {remote_hostname} to global server locks for path: {path}. Result: RDST: {rdest} and LDST: {ldest}"
             )
             return rdest and ldest
 

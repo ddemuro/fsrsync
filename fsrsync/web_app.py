@@ -77,7 +77,8 @@ class WebControl:
             raise HTTPException(status_code=401, detail="Unauthorized")
         request_body = await request.json()
         server = request_body.get("server")
-        result = instance.sync_state.check_if_server_is_locked(server)
+        path = request_body.get("path", None)
+        result = instance.sync_state.check_if_server_is_locked(server, path)
         return {"status": result}
 
     # Post to add a file to files_to_delete_after_sync_regular in instance.sync_state.add_to_files_to_delete_after_sync_regular format of post {"file": "file_name"}
