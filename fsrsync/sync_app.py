@@ -601,36 +601,39 @@ class SyncApplication:
                 f"Destination {remote_hostname} does not use global server locks. Continuing..."
             )
             return True
-        if use_gsl and remote_hostname is not None and notify_server_locks:
-            while self.check_if_server_is_locked(remote_hostname, path):
-                self.logger.debug(
-                    f"Destination {remote_hostname} is locked. Waiting..."
-                )
-                time.sleep(WAIT_60_SEC)
-                waited_for += WAIT_60_SEC
-                if waited_for >= WAIT_1H:
-                    still_locked = destination.get("web_client").check_if_server_locked(remote_hostname, path)
-                    if not still_locked.get("result", False):
-                        self.logger.debug(
-                            f"Destination {remote_hostname} no longer locked. Continuing..."
-                        )
-                        self.remove_from_global_server_locks(remote_hostname, path)
-                        break
-                    self.logger.error(
-                        f"Destination {remote_hostname} has been locked for too long. Skipping..."
-                    )
-                    continue
-            # Add destination to global server locks
-            rdest = destination.get("web_client").add_to_global_server_lock(
-                self.config_manager.get_hostname(), path
-            )
-            ldest = self.add_to_global_server_locks(remote_hostname, path)
+        if remote_hostname is None or not notify_server_locks:
             self.logger.debug(
-                f"Added destination {remote_hostname} to global server locks for path: {path}. Result: RDST: {rdest} and LDST: {ldest}"
+                f"Destination {remote_hostname} does not notify server locks. Continuing..."
             )
-            return rdest and ldest
+            return True
 
-        return False
+        while self.check_if_server_is_locked(remote_hostname, path):
+            self.logger.debug(
+                f"Destination {remote_hostname} is locked. Waiting..."
+            )
+            time.sleep(WAIT_60_SEC)
+            waited_for += WAIT_60_SEC
+            if waited_for >= WAIT_1H:
+                still_locked = destination.get("web_client").check_if_server_locked(remote_hostname, path)
+                if not still_locked.get("result", False):
+                    self.logger.debug(
+                        f"Destination {remote_hostname} no longer locked. Continuing..."
+                    )
+                    self.remove_from_global_server_locks(remote_hostname, path)
+                    break
+                self.logger.error(
+                    f"Destination {remote_hostname} has been locked for too long. Skipping..."
+                )
+                continue
+        # Add destination to global server locks
+        rdest = destination.get("web_client").add_to_global_server_lock(
+            self.config_manager.get_hostname(), path
+        )
+        ldest = self.add_to_global_server_locks(remote_hostname, path)
+        self.logger.debug(
+            f"Added destination {remote_hostname} to global server locks for path: {path}. Result: RDST: {rdest} and LDST: {ldest}"
+        )
+        return rdest and ldest
 
     def remove_remote_global_server_locks(self, destination):
         """Remove remote server from global server locks"""
@@ -640,30 +643,41 @@ class SyncApplication:
         remote_hostname = destination.get("remote_hostname", None)
         path = destination.get("path", None)
         self.logger.debug(f"Removing remote global server locks for {destination}, use_gsl: {use_gsl}, notify_server_locks: {notify_server_locks}, remote_hostname: {remote_hostname}")
-        if use_gsl and remote_hostname is not None and notify_server_locks:
-            # Add destination to global server locks with wait if locked
-            waited_for = ZERO
-            while self.check_if_server_is_locked(remote_hostname, path):
-                self.logger.debug(
-                    f"Destination {destination.get('remote_hostname', None)} is locked. Waiting..."
-                )
-                time.sleep(WAIT_60_SEC)
-                waited_for += WAIT_60_SEC
-                if waited_for >= WAIT_1H:
-                    self.logger.error(
-                        f"Destination {destination.get('remote_hostname', None)} has been locked for too long. Skipping..."
-                    )
-                    break
-            # Remove destination from global server locks
-            rdest = destination.get("web_client").remove_from_global_server_lock(
-                self.config_manager.get_hostname(), path
-            )
-            ldest = self.remove_from_global_server_locks(remote_hostname, path)
+
+        self.logger.debug(f"Adding remote global server locks for {destination}, use_gsl: {use_gsl}, notify_server_locks: {notify_server_locks}, remote_hostname: {remote_hostname}")
+        if not use_gsl:
             self.logger.debug(
-                f"Removed destination {destination.get('remote_hostname', None)} from global server locks. Result: RDST: {rdest} and LDST: {ldest}"
+                f"Destination {remote_hostname} does not use global server locks. Continuing..."
             )
-            return rdest and ldest
-        return False
+            return True
+        if remote_hostname is None or not notify_server_locks:
+            self.logger.debug(
+                f"Destination {remote_hostname} does not notify server locks. Continuing..."
+            )
+            return True
+
+        # Add destination to global server locks with wait if locked
+        waited_for = ZERO
+        while self.check_if_server_is_locked(remote_hostname, path):
+            self.logger.debug(
+                f"Destination {destination.get('remote_hostname', None)} is locked. Waiting..."
+            )
+            time.sleep(WAIT_60_SEC)
+            waited_for += WAIT_60_SEC
+            if waited_for >= WAIT_1H:
+                self.logger.error(
+                    f"Destination {destination.get('remote_hostname', None)} has been locked for too long. Skipping..."
+                )
+                break
+        # Remove destination from global server locks
+        rdest = destination.get("web_client").remove_from_global_server_lock(
+            self.config_manager.get_hostname(), path
+        )
+        ldest = self.remove_from_global_server_locks(remote_hostname, path)
+        self.logger.debug(
+            f"Removed destination {destination.get('remote_hostname', None)} from global server locks. Result: RDST: {rdest} and LDST: {ldest}"
+        )
+        return rdest and ldest
 
     def statistics_generator(
         self,
