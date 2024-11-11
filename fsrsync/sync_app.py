@@ -602,7 +602,7 @@ class SyncApplication:
             )
             return True
         if use_gsl and remote_hostname is not None and notify_server_locks:
-            while self.check_if_server_is_locked(remote_hostname):
+            while self.check_if_server_is_locked(remote_hostname, path):
                 self.logger.debug(
                     f"Destination {remote_hostname} is locked. Waiting..."
                 )
@@ -638,11 +638,12 @@ class SyncApplication:
         use_gsl = destination.get("use_global_server_lock", False)
         notify_server_locks = destination.get("notify_file_locks", False)
         remote_hostname = destination.get("remote_hostname", None)
+        path = destination.get("path", None)
         self.logger.debug(f"Removing remote global server locks for {destination}, use_gsl: {use_gsl}, notify_server_locks: {notify_server_locks}, remote_hostname: {remote_hostname}")
         if use_gsl and remote_hostname is not None and notify_server_locks:
             # Add destination to global server locks with wait if locked
             waited_for = ZERO
-            while self.check_if_server_is_locked(remote_hostname):
+            while self.check_if_server_is_locked(remote_hostname, path):
                 self.logger.debug(
                     f"Destination {destination.get('remote_hostname', None)} is locked. Waiting..."
                 )
@@ -655,9 +656,9 @@ class SyncApplication:
                     break
             # Remove destination from global server locks
             rdest = destination.get("web_client").remove_from_global_server_lock(
-                self.config_manager.get_hostname(), destination.get("path", None)
+                self.config_manager.get_hostname(), path
             )
-            ldest = self.remove_from_global_server_locks(remote_hostname, destination.get("path", None))
+            ldest = self.remove_from_global_server_locks(remote_hostname, path)
             self.logger.debug(
                 f"Removed destination {destination.get('remote_hostname', None)} from global server locks. Result: RDST: {rdest} and LDST: {ldest}"
             )

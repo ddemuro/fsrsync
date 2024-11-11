@@ -1,6 +1,6 @@
 import time
 from .logs import Logger
-from .utils import fix_path_slashes
+from .utils import fix_path_slashes, is_file_open
 from inotify_simple import INotify, flags
 
 
@@ -101,6 +101,7 @@ class FilesystemMonitor:
         self.logger.info(f"Event detected: {type_names} on {full_path}")
 
         self.log_files_opened_for_too_long()
+        self.check_if_file_still_locked()
 
         if event_mask & EVENT_MAP["IN_CREATE"]:
             self.logger.debug(f"File created: {full_path}, added to immediate sync")
@@ -155,6 +156,16 @@ class FilesystemMonitor:
             if file.path == path and file.how_long_locked() > max_wait_locked:
                 return False
         return True
+
+    def check_if_file_still_locked(self):
+        """Check if a file is still locked"""
+        files_to_remove = []
+        for file in self.open_files:
+            if not is_file_open(file.path):
+                files_to_remove.append(file)
+        for file in files_to_remove:
+            self.open_files.discard(file)
+            self.logger.debug(f"File {file.path} removed from locked files, it is no longer open")
 
     def clear_locks_exceeded_wait(self, path, max_wait_locked):
         """Clear locks that have exceeded the wait time"""
