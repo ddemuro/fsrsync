@@ -395,14 +395,16 @@ class SyncApplication:
         # Remove files with extensions to ignore
         filtered_files = []
         for file in immediate_sync_files_for_path:
-            if file.path.split(".")[-1] in extensions_to_ignore:
+            if file.extension in extensions_to_ignore:
                 self.logger.debug(f"Ignoring file {file.path} from immediate sync")
             else:
                 self.logger.debug(f"Adding file {file.path} to immediate sync")
                 filtered_files.append(file)
         # Check if we have immedeate sync files
-        files_to_sync_paths = [file.path for file in filtered_files]
-        if immediate_sync_files_for_path:
+        files_to_sync_paths = []
+        for file in filtered_files:
+            files_to_sync_paths.append(file.path)
+        if len(files_to_sync_paths) > 0:
             # Only sync the immediate sync files
             time_sync_start = time.time()
             self.logger.info(
@@ -456,6 +458,9 @@ class SyncApplication:
                 notification_result=notification,
                 log_type="regular"
             )
+            # Clear files to sync paths
+            files_to_sync_paths.clear()
+            filtered_files.clear()
 
     def process_regular_sync(self, destination, events):
         """Process regular sync for a destination"""
@@ -467,19 +472,19 @@ class SyncApplication:
             should_exclude = self.fs_monitor.clear_locks_exceeded_wait(
                 destination_path, destination["max_wait_locked"]
             )
-            should_exclude_paths = [file.path for file in should_exclude]
+            should_exclude_paths = []
+            for file in should_exclude:
+                should_exclude_paths.append(file.path)
             # Delay rsync if there are open files
             self.logger.debug(
                 f"Event queue limit reached for destination {destination['rsync_manager'].destination}. Running rsync..."
             )
 
             # Add files in events to the include list
-            include = [event.path for event in events]
-            # Include all events except for the ones that are locked
-            files_to_sync = []
-            for file in events:
-                if file.path not in should_exclude_paths:
-                    files_to_sync.append(file.path)
+            include = []
+            for event in events:
+                if event.path not in should_exclude_paths:
+                    include.append(event.path)
 
             # Add destination to global server locks if needed
             notification = self.notify_remote_global_server_locks(destination)
