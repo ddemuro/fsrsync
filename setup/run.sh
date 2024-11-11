@@ -37,7 +37,7 @@ if [ "$OPERATION" == "sync" ]; then
     echo "Starting the application... with sync operation"
     echo "ENVFILE: $ENVFILE"
     cd /fsrsync
-    python3 app.py --config_file $ENVFILE
+    python3 app.py --config $ENVFILE
 fi
 
 if [ "$OPERATION" == "fullsync" ]; then
@@ -48,7 +48,7 @@ if [ "$OPERATION" == "fullsync" ]; then
     echo "Starting the application... with fullsync operation"
     echo "ENVFILE: $ENVFILE"
     cd /fsrsync
-    python3 app.py --config_file $ENVFILE --fullsync
+    python3 app.py --config $ENVFILE --fullsync
 fi
 
 # Keep the container running
