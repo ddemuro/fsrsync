@@ -122,6 +122,10 @@ Each entry in the `destinations` array represents a configuration for a specific
 
 - **`full_sync_interval`**: The interval (in minutes) at which a full sync should be performed. A full sync transfers all files from the source to the destination.
 
+- **`files_to_exclude`**: A list of files or directories to exclude from syncing. For example, `["/tmp", "*.log"]` would exclude the `/tmp` directory and all `.log` files.
+
+- **`time_event_delay`**: The delay (in seconds) between events to prevent rapid syncing. This helps avoid excessive syncing when multiple events occur in quick succession.
+
 - **`options`**: Additional options for the `rsync` command (e.g., `-avPrl --delete`). These specify flags such as archive mode (`-a`), verbose output (`-v`), preserving permissions (`-P`), and deleting extra files on the destination (`--delete`).
 
 - **`ssh_port`**: The port used for SSH connections to the remote destination. Default is usually `22`.
@@ -139,8 +143,11 @@ Each entry in the `destinations` array represents a configuration for a specific
 - **`control_server_secret`**: The secret key specific to the destination for secure communication with the control server.
 
 - **`control_server_port`**: The port used by the control server for this specific destination (typically the same as the global `control_server_port`).
+
 - **`control_server_host`**: The host address the control server binds to for this specific destination (typically the same as the global `control_server_host`).
+
 - **`extensions_to_ignore`**: A list of file extensions to ignore during syncing. For example, `[".log", ".tmp"]` would ignore log and temporary files.
+
 - **`path`**: The source path on the local system from where files will be synced.
 
 - **`events`**: A list of filesystem events that trigger the sync. Examples include:

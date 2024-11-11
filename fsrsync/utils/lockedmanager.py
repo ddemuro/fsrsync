@@ -49,8 +49,10 @@ class PendingLocked:
 
     def remove_locked_file(self, path):
         """Remove a locked file from the list"""
-        self.locked_files = [
-            file for file in self.locked_files if file.path != path]
+        self.locked_files = []
+        for locked_file in self.locked_files:
+            if locked_file.path != path:
+                self.locked_files.append(locked_file)
 
     def has_locked_files(self):
         """Check if there are locked files"""

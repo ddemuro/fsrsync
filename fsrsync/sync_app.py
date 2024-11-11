@@ -144,9 +144,13 @@ class SyncApplication:
         for server_lock in self.global_server_locks:
             if server_lock.server_name == server and server_lock.path == path:
                 find_server = server_lock
-                result = find_server.lock(self.hostname, path)
-                self.logger.info(f"Added lock for server {server} path: {path}, result: {result}")
-                return result
+                if find_server.locked:
+                    self.logger.info(f"Server {server} for path {path} is already locked")
+                    return False
+                else:
+                    result = find_server.lock(self.hostname, path)
+                    self.logger.info(f"Added lock for server {server} path: {path}, result: {result}")
+                    return result
         if find_server is None:
             find_server = ServerLocker(server_name=server, logger=self.logger,
                                        path=path)
@@ -476,7 +480,7 @@ class SyncApplication:
             # Add destination to global server locks if needed
             notification = self.notify_remote_global_server_locks(destination)
             if not notification:
-                self.logger.error(
+                self.logger.info(
                     f"Could not run regular sync for destination {destination.get('remote_hostname', None)} to global server locks. Skipping regular sync..."
                 )
                 self.statistics_generator(
