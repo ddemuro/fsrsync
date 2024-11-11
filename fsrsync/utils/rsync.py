@@ -67,13 +67,16 @@ class RsyncManager:
     def run(self, exclude_list=None, include_list=None):
         """Run rsync with the specified options, paths, and destination"""
 
-        # Ensure no excluded files are included in the include list
-        if exclude_list and include_list:
+        # Dedupe the exclude and include lists
+        if exclude_list:
             exclude_list = self.dedupe_a_list(exclude_list)
+        # Ensure no excluded files are included in the include list
+        if include_list:
             include_list = self.dedupe_a_list(include_list)
-            for exclude_item in exclude_list:
-                if exclude_item in include_list:
-                    include_list.remove(exclude_item)
+            if exclude_list:
+                for exclude_item in exclude_list:
+                    if exclude_item in include_list:
+                        include_list.remove(exclude_item)
 
         # Don't run if include list is empty
         if include_list and len(include_list) == 0:
