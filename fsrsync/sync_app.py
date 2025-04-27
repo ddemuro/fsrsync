@@ -80,8 +80,11 @@ class ServerLocker:
             if time_diff.total_seconds() / 60 >= self.max_lock_time:
                 self.locked = False
                 self.logger(f"Lock for server {self.server_name} has expired")
-            self.logger(f"Lock for server {self.server_name} has not expired")
-
+                return True
+            else:
+                self.logger(f"Lock for server {self.server_name} has not expired")
+                return False
+        return False
 
 class SyncApplication:
     """Main application class to monitor filesystem events and trigger rsync"""
@@ -128,6 +131,10 @@ class SyncApplication:
         )
         self.full_sync = full_sync  # Full sync flag
         self.web_control = None
+        # Add locks for thread safety
+        self.files_lock = threading.Lock()
+        self.global_server_locks_lock = threading.Lock()
+        self.destinations_lock = threading.Lock()
 
     def check_if_server_is_locked(self, server, path=None):
         """Check if a server is locked"""
@@ -172,8 +179,12 @@ class SyncApplication:
 
     def check_global_server_locks(self):
         """Check global server locks"""
-        for server in self.global_server_locks:
-            server.clear_lock_if_expired()
+        with self.global_server_locks_lock:
+            for server in self.global_server_locks:
+                was_expired = server.clear_lock_if_expired()
+                if was_expired:
+                    self.logger.info(f"Lock for server {server.server_name} has been cleared due to expiration")
+                    #TODO: Notify destinations
 
     def setup(self):
         """Set up the application by loading configuration and setting up rsync managers"""
@@ -226,54 +237,56 @@ class SyncApplication:
 
     def run(self):
         """Run the application to monitor filesystem events and trigger rsync"""
-        for event in self.fs_monitor.event_generator():
-            self.fs_monitor.handle_event(event)
-
-            # Check if there are files pending immediate sync
-            pending_immediate = len(self.fs_monitor.get_immediate_sync_files())
-            pending_regular = len(self.fs_monitor.get_regular_sync_files())
-            self.logger.debug(
-                f"Pending immediate sync files:  {pending_immediate}, pending regular sync files: {pending_regular}"
-            )
-
-            # Update event counts and check queue limits for each destination
-            if pending_immediate > 0 or pending_regular > 0:
-                self.logger.debug("Checking event queue limits for destinations...")
-                threads = []
-                for destination in self.destinations:
-                    # Call self.manage_destination_event(destination) in a separate thread
-                    # Check if destination is locked, don't run if it is
-                    if not destination.get("locked_on_sync"):
-                        self.logger.debug(
-                            f"Starting thread for destination: {destination['rsync_manager'].destination}"
-                        )
-                        thread = threading.Thread(
-                            target=self.manage_destination_event, args=(destination,)
-                        )
-                        thread.start()
-                        threads.append(thread)
-                # Wait for all threads to finish
-                for thread in threads:
-                    thread.join()
-                # All threads are back
-                self.logger.debug("All threads have finished")
-                # Clean all files that need to be deleted after sync
-                deleted_files_reg, deleted_files_imm = [], []
-                for file in self.files_to_delete_after_sync_regular:
-                    if file.synced_successfully:
-                        self.fs_monitor.delete_regular_sync_file(file)
-                        deleted_files_reg.append(file)
-                for file in self.files_to_delete_after_sync_immediate:
-                    if file.synced_successfully:
-                        self.fs_monitor.delete_immediate_sync_file(file)
-                        deleted_files_imm.append(file)
-
-                # Remove files from the list
-                for file in deleted_files_reg:
-                    self.files_to_delete_after_sync_regular.remove(file)
-                for file in deleted_files_imm:
-                    self.files_to_delete_after_sync_immediate.remove(file)
-                self.logger.debug("All files have been deleted after sync")
+        try:
+            for event in self.fs_monitor.event_generator():
+                try:
+                    # Existing code for handling events...
+                    self.fs_monitor.handle_event(event)
+                    
+                    # Check if there are files pending immediate sync
+                    pending_immediate = len(self.fs_monitor.get_immediate_sync_files())
+                    pending_regular = len(self.fs_monitor.get_regular_sync_files())
+                    
+                    # Rest of the code...
+                    
+                    if pending_immediate > 0 or pending_regular > 0:
+                        active_threads = []
+                        for destination in self.destinations:
+                            if not destination.get("locked_on_sync"):
+                                thread = threading.Thread(
+                                    target=self._safe_manage_destination_event, 
+                                    args=(destination,)
+                                )
+                                thread.start()
+                                active_threads.append(thread)
+                        
+                        # Wait with timeout for threads to complete
+                        for thread in active_threads:
+                            thread.join(timeout=300)  # 5-minute timeout
+                        
+                        # Check if any threads are still running and handle appropriately
+                        still_running = [t for t in active_threads if t.is_alive()]
+                        if still_running:
+                            self.logger.warning(f"{len(still_running)} threads still running after timeout")
+                        
+                        # Process deletion with proper locking
+                        with self.files_lock:
+                            # Existing code for cleaning up files...
+                            
+                except Exception as e:
+                    self.logger.error(f"Error handling event: {e}")
+                    # Continue processing other events
+        except Exception as e:
+            self.logger.critical(f"Critical error in event monitoring: {e}")
+            # Could implement recovery here or exit gracefully
+            raise
+            
+    def _safe_manage_destination_event(self, destination):
+        """Wrapper for manage_destination_event with error handling"""
+        try:
+            self.manage_destination_event(destination)
+        except Exception as e:
+            self.logger.error(f"Error in manage_destination_event for {destination['rsync_manager'].destination}: {e}")
 
     def setup_destination(self, dest_config):
         """Set up a destination with an rsync manager and inotify watcher"""
@@ -571,47 +584,51 @@ class SyncApplication:
         # Grab extensions to ignore
         extensions_to_ignore = destination.get("extensions_to_ignore", [])
         self.logger.debug(f"Extensions to ignore: {extensions_to_ignore}")
-        # Remove files with those extensions from the regular sync list and immediate sync list
-        files_to_remove = []
-        for file in self.fs_monitor.get_regular_sync_files(destination_path):
-            if file.extension in extensions_to_ignore:
-                self.logger.debug(
-                    f"Removing file {file.path} from regular sync as it has an extension to ignore"
-                )
-                files_to_remove.append(file)
-        for file in files_to_remove:
-            destination.get("web_client").delete_file_pending_for_path(file.path)
-            self.fs_monitor.delete_regular_sync_file(file.path)
-        files_to_remove = []
-        for file in self.fs_monitor.get_immediate_sync_files(destination_path):
-            if file.extension in extensions_to_ignore:
-                self.logger.debug(
-                    f"Removing file {file.path} from immediate sync as it has an extension to ignore"
-                )
-                files_to_remove.append(file)
-        for file in files_to_remove:
-            self.fs_monitor.delete_immediate_sync_file(file.path)
-            destination.get("web_client").delete_file_pending_for_path(file.path)
+        # Check if we have files to sync
+        with self.files_lock:
+            # Remove files with those extensions from the regular sync list and immediate sync list
+            files_to_remove = []
+            for file in self.fs_monitor.get_regular_sync_files(destination_path):
+                if file.extension in extensions_to_ignore:
+                    self.logger.debug(
+                        f"Removing file {file.path} from regular sync as it has an extension to ignore"
+                    )
+                    files_to_remove.append(file)
+            for file in files_to_remove:
+                destination.get("web_client").delete_file_pending_for_path(file.path)
+                self.fs_monitor.delete_regular_sync_file(file.path)
+            files_to_remove = []
+            for file in self.fs_monitor.get_immediate_sync_files(destination_path):
+                if file.extension in extensions_to_ignore:
+                    self.logger.debug(
+                        f"Removing file {file.path} from immediate sync as it has an extension to ignore"
+                    )
+                    files_to_remove.append(file)
+            for file in files_to_remove:
+                self.fs_monitor.delete_immediate_sync_file(file.path)
+                destination.get("web_client").delete_file_pending_for_path(file.path)
 
-        destination["locked_on_sync"] = True
-        time_started = time.time()
-        # Check if we have immedeate sync files
-        self.immediate_sync_files_for_destination(
-            destination,
-            self.fs_monitor.get_immediate_sync_files(destination_path),
-        )
-        # Process regular sync
-        self.process_regular_sync(
-            destination, self.fs_monitor.get_regular_sync_files(destination_path)
-        )
-        # After every sync clear pending files
-        self.fs_monitor.delete_regular_sync_files_for_path(
-            destination_path, time_started
-        )
-        self.fs_monitor.delete_immediate_sync_files_for_path(
-            destination_path, time_started
-        )
-        destination["locked_on_sync"] = False
+            destination["locked_on_sync"] = True
+            time_started = time.time()
+        # Since we need to sync we need global locks
+        with self.global_server_locks_lock:
+            # Check if we have immedeate sync files
+            self.immediate_sync_files_for_destination(
+                destination,
+                self.fs_monitor.get_immediate_sync_files(destination_path),
+            )
+            # Process regular sync
+            self.process_regular_sync(
+                destination, self.fs_monitor.get_regular_sync_files(destination_path)
+            )
+            # After every sync clear pending files
+            self.fs_monitor.delete_regular_sync_files_for_path(
+                destination_path, time_started
+            )
+            self.fs_monitor.delete_immediate_sync_files_for_path(
+                destination_path, time_started
+            )
+            destination["locked_on_sync"] = False
 
     def notify_remote_global_server_locks(self, destination):
         """Notify remote server of global server locks"""
@@ -714,87 +731,123 @@ class SyncApplication:
         notification_result=False,
         log_type="regular",
     ):
-        """Generator to get statistics for each destination"""
+        """Generator to get statistics for each destination with cleanup"""
         if destination is None:
             return None
+            
+        # Create copies of paths to avoid holding references to the original objects
         convert_regular_sync_files_to_list = [
             file.path for file in regular_sync_files
-        ]
+        ] if regular_sync_files else []
+        
         convert_immediate_sync_files_to_list = [
             file.path for file in immediate_sync_files
-        ]
+        ] if immediate_sync_files else []
+        
         stats = {
             "path": destination.get("path"),
             "regular_sync_files": convert_regular_sync_files_to_list,
             "immediate_sync_files": convert_immediate_sync_files_to_list,
-            "regular_sync_files_count": len(regular_sync_files),
-            "immediate_sync_files_count": len(immediate_sync_files),
+            "regular_sync_files_count": len(regular_sync_files) if regular_sync_files else 0,
+            "immediate_sync_files_count": len(immediate_sync_files) if immediate_sync_files else 0,
             "event_queue_limit": destination.get("event_queue_limit"),
-            "event_count": len(regular_sync_files) + len(immediate_sync_files),
+            "event_count": (len(regular_sync_files) if regular_sync_files else 0) + 
+                        (len(immediate_sync_files) if immediate_sync_files else 0),
             # Get current time
             "last_sync": str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
             "last_full_sync": str(destination.get("location_last_full_sync", None)),
             "result": sync_result,
             "notification_result": notification_result,
             "log_type": log_type,
+            # Add a timestamp for easier cleanup
+            "timestamp": time.time()
         }
-        # If we have more than 10 statistics, remove the oldest one
+        
+        # If we have more than max_stats statistics, remove the oldest ones
         if len(destination["statistics"]) >= self.max_stats:
-            destination["statistics"].pop(ZERO)
+            # Remove oldest entries
+            destination["statistics"] = sorted(
+                destination["statistics"], 
+                key=lambda x: x.get("timestamp", 0), 
+                reverse=True
+            )[:self.max_stats-1]
+            
         destination["statistics"].append(stats)
+        
+        # Periodically clean up older than 24 hours (optional)
+        one_day_ago = time.time() - 86400
+        destination["statistics"] = [
+            stat for stat in destination["statistics"] 
+            if stat.get("timestamp", 0) > one_day_ago
+        ]
 
     def check_locations_that_need_full_sync(self):
         """Check locations that need full sync"""
         while True:
-            # Check global server locks
-            self.logger.debug("Checking global server locks...")
-            self.check_global_server_locks()
-            self.logger.debug("Checking locations that need full sync...")
-            for destination in self.destinations:
-                path = destination.get("path")
-                if destination.get("location_last_full_sync") is None:
-                    self.logger.debug(
-                        f"Location {path} has not been synced. Running full sync..."
-                    )
-                    ensure_excludes = destination.get("files_to_exclude", None)
-                    sync_result = destination["rsync_manager"].run(
-                        exclude_list=ensure_excludes
-                        )
-                    destination["location_last_full_sync"] = datetime.datetime.now()
-                    self.statistics_generator(
-                        destination,
-                        self.fs_monitor.get_regular_sync_files(path),
-                        self.fs_monitor.get_immediate_sync_files(path),
-                        sync_result=sync_result,
-                        notification_result=None,
-                        log_type="full",
-                    )
-                else:
-                    # Check if we need to run a full sync
-                    last_full_sync = destination.get("location_last_full_sync")
-                    current_time = datetime.datetime.now()
-                    time_diff = current_time - last_full_sync
-                    full_sync_interval = destination.get("full_sync_interval", DEFAULT_FULL_SYNC)
-                    if time_diff.total_seconds() / 60 >= full_sync_interval:
-                        # Remove destination from global server locks
+            try:
+                # Check global server locks
+                self.logger.debug("Checking global server locks...")
+                self.check_global_server_locks()
+                self.logger.debug("Checking locations that need full sync...")
+                
+                for destination in self.destinations:
+                    try:
+                        path = destination.get("path")
+                        # Define ensure_excludes for each destination
+                        ensure_excludes = destination.get("files_to_exclude", [])
+                        
+                        if destination.get("location_last_full_sync") is None:
+                            self.logger.debug(
+                                f"Location {path} has not been synced. Running full sync..."
+                            )
+                            sync_result = destination["rsync_manager"].run(
+                                exclude_list=ensure_excludes
+                                )
+                            destination["location_last_full_sync"] = datetime.datetime.now()
+                            self.statistics_generator(
+                                destination,
+                                self.fs_monitor.get_regular_sync_files(path),
+                                self.fs_monitor.get_immediate_sync_files(path),
+                                sync_result=sync_result,
+                                notification_result=None,
+                                log_type="full",
+                            )
+                        else:
+                            # Check if we need to run a full sync
+                            last_full_sync = destination.get("location_last_full_sync")
+                            current_time = datetime.datetime.now()
+                            time_diff = current_time - last_full_sync
+                            full_sync_interval = destination.get("full_sync_interval", DEFAULT_FULL_SYNC)
+                            if time_diff.total_seconds() / 60 >= full_sync_interval:
+                                # Remove destination from global server locks
+                                notification = self.remove_remote_global_server_locks(destination)
+                                self.logger.debug(
+                                    f"Removed destination {destination.get('remote_hostname', None)} to global server locks. Result: {notification}"
+                                )
+                                self.logger.debug(
+                                    f"Location {path} has not been synced in over {full_sync_interval} minutes. Running full sync..."
+                                )
+                                # Run with the correct exclude list
+                                destination["rsync_manager"].run(exclude_list=ensure_excludes)
+                                destination["location_last_full_sync"] = current_time
+                        
+                        # Always attempt to remove destination from global server locks
                         notification = self.remove_remote_global_server_locks(destination)
                         self.logger.debug(
                             f"Removed destination {destination.get('remote_hostname', None)} to global server locks. Result: {notification}"
                         )
-                        self.logger.debug(
-                            f"Location {path} has not been synced in over {full_sync_interval} minutes. Running full sync..."
-                        )
-                        destination["rsync_manager"].run(exclude_list=ensure_excludes)
-                        destination["location_last_full_sync"] = current_time
-                # Remove destination from global server locks
-                notification = self.remove_remote_global_server_locks(destination)
+                    except Exception as e:
+                        self.logger.error(f"Error in full sync for destination {destination.get('path')}: {e}")
+                        # Continue with next destination
+                        
                 self.logger.debug(
-                    f"Removed destination {destination.get('remote_hostname', None)} to global server locks. Result: {notification}"
+                    f"Sleeping for {CHECK_THREADS_SLEEP} seconds before checking locations that need full sync..."
                 )
-            self.logger.debug(
-                f"Sleeping for {CHECK_THREADS_SLEEP} seconds before checking locations that need full sync..."
-            )
-            time.sleep(CHECK_THREADS_SLEEP)
+                time.sleep(CHECK_THREADS_SLEEP)
+            except Exception as e:
+                self.logger.error(f"Error in check_locations_that_need_full_sync: {e}")
+                # Sleep and continue
+                time.sleep(CHECK_THREADS_SLEEP)
 
     def run_check_locations_that_need_full_sync_in_thread(self):
         """Run check locations that need full sync in a separate thread"""

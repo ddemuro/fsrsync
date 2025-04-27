@@ -1,122 +1,434 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - fsrsync</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #f9f9f9;
-            color: #333;
-        }
-        h1 {
-            text-align: center;
-            color: #4CAF50;
-        }
-        form {
-            margin-bottom: 20px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        label {
-            margin-right: 10px;
-        }
-        input[type="text"] {
-            padding: 8px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            width: 300px;
-        }
-        button {
-            padding: 8px 16px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #45a049;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-            background-color: white;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 12px;
-            text-align: left;
-        }
-        th {
-            background-color: #4CAF50;
-            color: white;
-        }
-        tr:nth-child(even) {
-            background-color: #f2f2f2;
-        }
-        tr:hover {
-            background-color: #f1f1f1;
-        }
-        .json-display {
-            font-family: "Courier New", Courier, monospace;
-            background-color: #f4f4f4;
-            padding: 10px;
-            border-radius: 4px;
-            overflow-x: auto;
-            white-space: pre-wrap;
-            max-width: 600px;
-            word-wrap: break-word;
-        }
-        p {
-            text-align: center;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - fsrsync</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #3498db;
+      --primary-dark: #2980b9;
+      --success: #2ecc71;
+      --success-dark: #27ae60;
+      --danger: #e74c3c;
+      --warning: #f39c12;
+      --light: #f8f9fa;
+      --dark: #343a40;
+      --gray: #6c757d;
+      --gray-light: #f4f6f9;
+      --border: #dee2e6;
+      --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      --radius: 0.5rem;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--gray-light);
+      color: var(--dark);
+      line-height: 1.6;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo i {
+      font-size: 32px;
+      color: var(--primary);
+    }
+
+    h1 {
+      color: var(--dark);
+      font-weight: 600;
+      margin: 0;
+      font-size: 28px;
+    }
+
+    h2 {
+      color: var(--dark);
+      margin-bottom: 20px;
+      font-weight: 500;
+      font-size: 22px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .auth-container {
+      background-color: white;
+      padding: 30px;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      max-width: 500px;
+      margin: 50px auto;
+      text-align: center;
+    }
+
+    .auth-container h2 {
+      margin-bottom: 25px;
+      border-bottom: none;
+    }
+
+    .auth-form {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      text-align: left;
+      gap: 8px;
+    }
+
+    label {
+      font-weight: 500;
+      color: var(--dark);
+    }
+
+    input[type="text"], input[type="password"] {
+      padding: 12px 15px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 16px;
+      transition: border 0.3s;
+    }
+
+    input[type="text"]:focus, input[type="password"]:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+    }
+
+    button {
+      background-color: var(--primary);
+      color: white;
+      border: none;
+      border-radius: var(--radius);
+      padding: 12px 15px;
+      font-size: 16px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.3s, transform 0.2s;
+    }
+
+    button:hover {
+      background-color: var(--primary-dark);
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    .dashboard {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 30px;
+    }
+
+    @media (min-width: 992px) {
+      .dashboard {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .card {
+      background-color: white;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .card-header {
+      padding: 20px;
+      background-color: white;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .card-header h3 {
+      margin: 0;
+      font-weight: 500;
+      color: var(--dark);
+    }
+
+    .card-body {
+      padding: 20px;
+    }
+
+    .refresh-btn {
+      background: none;
+      border: none;
+      color: var(--primary);
+      font-size: 18px;
+      cursor: pointer;
+    }
+
+    .refresh-btn:hover {
+      color: var(--primary-dark);
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 50px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .badge-success {
+      background-color: #d1f2e5;
+      color: #198754;
+    }
+
+    .badge-danger {
+      background-color: #fad7dd;
+      color: #dc3545;
+    }
+
+    .badge-warning {
+      background-color: #fff3cd;
+      color: #ffc107;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      padding: 12px 15px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+
+    th {
+      background-color: var(--gray-light);
+      font-weight: 500;
+      color: var(--dark);
+    }
+
+    tr:hover {
+      background-color: rgba(0, 0, 0, 0.01);
+    }
+
+    .stats-container {
+      max-height: 500px;
+      overflow-y: auto;
+    }
+
+    .code-block {
+      background-color: #2d3748;
+      color: #e2e8f0;
+      font-family: 'Consolas', 'Monaco', monospace;
+      padding: 15px;
+      border-radius: 5px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .text-center {
+      text-align: center;
+    }
+
+    .mt-4 {
+      margin-top: 20px;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--gray);
+    }
+
+    .empty-state i {
+      font-size: 48px;
+      margin-bottom: 10px;
+      opacity: 0.5;
+    }
+
+    .footer {
+      margin-top: 50px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      color: var(--gray);
+      font-size: 14px;
+    }
+
+    /* Status indicators */
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .status-success {
+      background-color: var(--success);
+    }
+
+    .status-danger {
+      background-color: var(--danger);
+    }
+
+    .status-warning {
+      background-color: var(--warning);
+    }
+  </style>
 </head>
 <body>
-    <h1>Dashboard</h1>
-    {% if not secret_provided %}
-    <form action="/dashboard" method="get">
-        <label for="secret">Enter Secret Header:</label>
-        <input type="text" id="secret" name="secret" required>
-        <button type="submit">Submit</button>
+  {% if not secret_provided %}
+  <div class="auth-container">
+    <div class="logo text-center">
+      <i class="fas fa-sync-alt"></i>
+      <h1>fsrsync</h1>
+    </div>
+    <h2>Dashboard Authentication</h2>
+    <form class="auth-form" action="/dashboard" method="get">
+      <div class="form-group">
+        <label for="secret">Secret Key</label>
+        <input type="password" id="secret" name="secret" placeholder="Enter your secret key" required>
+      </div>
+      <button type="submit">
+        <i class="fas fa-sign-in-alt"></i> Access Dashboard
+      </button>
     </form>
-    {% else %}
-    <form action="/dashboard" method="post">
-        <label for="secret">Enter Secret Header:</label>
-        <input type="text" id="secret" name="secret" value="{{ secret }}" required>
-        <button type="submit">Submit</button>
-    </form>
-    {% endif %}
+  </div>
+  {% else %}
+  <div class="container">
+    <header class="header">
+      <div class="logo">
+        <i class="fas fa-sync-alt"></i>
+        <h1>fsrsync Dashboard</h1>
+      </div>
+      <form action="/dashboard" method="get" style="display: flex; gap: 10px;">
+        <input type="hidden" name="secret" value="{{ secret }}">
+        <button type="submit">
+          <i class="fas fa-sync"></i> Refresh
+        </button>
+      </form>
+    </header>
 
-    <h2>Statistics</h2>
-    {% if result %}
-    <table>
-        <thead>
-            <tr>
-                <th>Destination Path</th>
-                <th>Statistics</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in result %}
-            <tr>
-                <td>{{ item.destination }}</td>
-                <td>
-                    <div class="json-display">{{ item.statistics | tojson(indent=2) }}</div>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% else %}
-    <p>No statistics available.</p>
-    {% endif %}
+    <h2><i class="fas fa-chart-line"></i> System Overview</h2>
+
+    <div class="dashboard">
+      {% if result %}
+        {% for item in result %}
+        <div class="card">
+          <div class="card-header">
+            <h3><i class="fas fa-folder"></i> {{ item.destination }}</h3>
+            <div class="status">
+              {% if item.statistics and item.statistics[-1].result %}
+                <div class="status-dot status-success"></div>
+                <span>Synced</span>
+              {% else %}
+                <div class="status-dot status-danger"></div>
+                <span>Error</span>
+              {% endif %}
+            </div>
+          </div>
+          <div class="card-body">
+            {% if item.statistics %}
+              <div class="stats-container">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Last Sync</th>
+                      <th>Type</th>
+                      <th>Files</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for stat in item.statistics %}
+                    <tr>
+                      <td>{{ stat.last_sync }}</td>
+                      <td>
+                        {% if stat.log_type == "regular" %}
+                          <span class="badge badge-success">Regular</span>
+                        {% elif stat.log_type == "immediate" %}
+                          <span class="badge badge-warning">Immediate</span>
+                        {% else %}
+                          <span class="badge badge-primary">Full</span>
+                        {% endif %}
+                      </td>
+                      <td>{{ stat.regular_sync_files_count + stat.immediate_sync_files_count }}</td>
+                      <td>
+                        {% if stat.result %}
+                          <span class="badge badge-success">Success</span>
+                        {% else %}
+                          <span class="badge badge-danger">Failed</span>
+                        {% endif %}
+                      </td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+              <details class="mt-4">
+                <summary>View Details</summary>
+                <div class="code-block">{{ item.statistics | tojson(indent=2) }}</div>
+              </details>
+            {% else %}
+              <div class="empty-state">
+                <i class="fas fa-info-circle"></i>
+                <p>No statistics available for this destination.</p>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+      <div class="card">
+        <div class="card-body">
+          <div class="empty-state">
+            <i class="fas fa-database"></i>
+            <p>No statistics available. Check your configuration or ensure sync operations have occurred.</p>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+    
+    <footer class="footer">
+      <p>fsrsync Dashboard &copy; 2025. All rights reserved.</p>
+    </footer>
+  </div>
+  {% endif %}
 </body>
 </html>

@@ -2,7 +2,8 @@ import time
 from .logs import Logger
 from .utils import fix_path_slashes, is_file_open
 from inotify_simple import INotify, flags
-
+import threading
+from threading import Lock
 
 # Map human-readable event names to inotify constants
 EVENT_MAP = {
@@ -49,8 +50,9 @@ class File:
 class FilesystemMonitor:
     """Class to monitor filesystem events using inotify"""
     warning_file_open_time = 86400
+    max_tracked_files = 500000
 
-    def __init__(self, time_between_events=5):
+    def __init__(self, time_between_events=5, max_tracked_files=500000):
         """Initialize the filesystem monitor"""
         self.inotify_watcher = INotify()
         self.watches = {}  # Keep track of paths being watched
@@ -59,6 +61,20 @@ class FilesystemMonitor:
         self.regular_sync = set()  # Track files that need regular sync
         self.logger = Logger()
         self.time_between_events = time_between_events  # Time between events in seconds
+        self.max_tracked_files = max_tracked_files
+        self.open_files_lock = Lock()
+        self.immediate_sync_lock = Lock()
+        self.regular_sync_lock = Lock()
+
+    def __del__(self):
+        """Destructor to close inotify watcher"""
+        try:
+            if hasattr(self, 'inotify_watcher'):
+                self.inotify_watcher.close()
+        except Exception as e:
+            # Log the error but don't raise it
+            if hasattr(self, 'logger'):
+                self.logger.error(f"Error closing inotify_watcher: {e}")
 
     def get_aggregated_events(self):
         """Return all events"""
@@ -87,11 +103,7 @@ class FilesystemMonitor:
                 yield event
 
     def handle_event(self, event):
-        """Handle a filesystem event
-
-        :param event: Event to handle
-        :type event: inotify_simple.Event
-        """
+        """Handle a filesystem event with improved handling of complex sequences"""
         wd = event.wd
         path = self.watches.get(wd, "Unknown path")
         event_mask = event.mask
@@ -100,44 +112,83 @@ class FilesystemMonitor:
         full_path = f"{path}/{filename}" if filename else path
         full_path = fix_path_slashes(full_path)
 
-        # All other events
-        ALL_OTHER_EVENTS = [
-            "IN_ACCESS",
-            "IN_MODIFY",
-            "IN_DELETE",
-            "IN_MOVED_FROM",
-            "IN_MOVED_TO",
-            "IN_MOVE_SELF",
-            "IN_DELETE_SELF",
-            "IN_ATTRIB",
-            "IN_CLOSE_NOWRITE",
-        ]
-
-        # Remove noise of "OPEN" events
-        if any(event_mask & EVENT_MAP[event] for event in ALL_OTHER_EVENTS):
-            self.logger.info(f"Event detected: {type_names} on {full_path}")
-
+        # Track specific types of events for this file path
+        event_types = []
+        
+        # Check for specific event types
         if event_mask & EVENT_MAP["IN_CREATE"]:
-            self.logger.debug(f"File created: {full_path}, added to immediate sync")
-            self.add_immediate_sync_file(File(full_path, self.logger))
-
-        # If IN_OPEN and not ISDIR, add to locked files
+            event_types.append("CREATE")
+            
         if event_mask & EVENT_MAP["IN_OPEN"] and not event_mask & EVENT_MAP["IN_ISDIR"]:
-            self.logger.debug(f"File opened: {full_path}")
-            self.add_to_locked_files(File(full_path, self.logger))
-
-        # File closed
-        FILE_CLOSED_EVENTS = ["IN_CLOSE_WRITE", "IN_CLOSE_NOWRITE"]
-        if any(event_mask & EVENT_MAP[event] for event in FILE_CLOSED_EVENTS):
-            if full_path in self.open_files:
-                self.logger.debug(f"File closed: {full_path}")
-                self.delete_locked_file(full_path)
+            event_types.append("OPEN")
+            
+        if event_mask & EVENT_MAP["IN_CLOSE_WRITE"]:
+            event_types.append("CLOSE_WRITE")
+            
+        if event_mask & EVENT_MAP["IN_CLOSE_NOWRITE"]:
+            event_types.append("CLOSE_NOWRITE")
+            
+        if event_mask & EVENT_MAP["IN_DELETE"]:
+            event_types.append("DELETE")
+            
+        if event_mask & EVENT_MAP["IN_MOVED_FROM"]:
+            event_types.append("MOVED_FROM")
+            
+        if event_mask & EVENT_MAP["IN_MOVED_TO"]:
+            event_types.append("MOVED_TO")
+            
+        # Log all events
+        self.logger.info(f"Events detected: {event_types} on {full_path}")
+        
+        # Handle complex sequences more robustly
+        
+        # Handle creation - add to immediate sync unless explicitly deleted
+        if "CREATE" in event_types and "DELETE" not in event_types:
+            self.logger.debug(f"File created: {full_path}, added to immediate sync")
+            with self.immediate_sync_lock:
                 self.add_immediate_sync_file(File(full_path, self.logger))
-
-        if any(event_mask & EVENT_MAP[event] for event in ALL_OTHER_EVENTS):
-            self.logger.debug(f"File modified: {full_path}")
-            self.add_regular_sync_file(File(full_path, self.logger))
-
+        
+        # Handle file opening - add to locked files
+        if "OPEN" in event_types and "IN_ISDIR" not in type_names:
+            self.logger.debug(f"File opened: {full_path}")
+            with self.open_files_lock:
+                self.add_to_locked_files(File(full_path, self.logger))
+        
+        # Handle file closing - remove from locked and add to appropriate sync
+        if "CLOSE_WRITE" in event_types or "CLOSE_NOWRITE" in event_types:
+            with self.open_files_lock:
+                was_open = False
+                for file in self.open_files:
+                    if file.path == full_path:
+                        was_open = True
+                        break
+                        
+                if was_open:
+                    self.logger.debug(f"File closed: {full_path}")
+                    self.delete_locked_file(full_path)
+                    
+                    # Only add to immediate sync if it was closed with writing
+                    if "CLOSE_WRITE" in event_types and "DELETE" not in event_types:
+                        with self.immediate_sync_lock:
+                            self.add_immediate_sync_file(File(full_path, self.logger))
+        
+        # Handle deletions - remove from all tracking
+        if "DELETE" in event_types or "MOVED_FROM" in event_types:
+            self.logger.debug(f"File deleted or moved from: {full_path}")
+            with self.open_files_lock:
+                self.delete_locked_file(full_path)
+            with self.immediate_sync_lock:
+                self.delete_immediate_sync_file(full_path)
+            with self.regular_sync_lock:
+                self.delete_regular_sync_file(full_path)
+        
+        # Handle moves - track as regular sync for destination
+        if "MOVED_TO" in event_types:
+            self.logger.debug(f"File moved to: {full_path}")
+            with self.regular_sync_lock:
+                self.add_regular_sync_file(File(full_path, self.logger))
+        
+        # Perform periodic maintenance
         self.log_files_opened_for_too_long()
         self.check_if_file_still_locked()
 
@@ -322,14 +373,23 @@ class FilesystemMonitor:
         self.logger.debug(f"File {path} removed from regular sync")
 
     def add_regular_sync_file(self, file):
-        """Add file to regular sync"""
-        # Return if file already exists
-        for f in self.regular_sync:
-            if f.path == file.path:
-                self.logger.debug(f"File {file} already in regular sync")
-                return
-        self.regular_sync.add(file)
-        self.logger.debug(f"File {file} added to regular sync")
+        """Add file to regular sync with size limit"""
+        with self.regular_sync_lock:
+            # Check size limit before adding
+            if len(self.regular_sync) >= self.max_tracked_files:
+                # Remove oldest file (based on start_time)
+                oldest_file = min(self.regular_sync, key=lambda f: f.start_time, default=None)
+                if oldest_file:
+                    self.regular_sync.discard(oldest_file)
+                    self.logger.warning(f"Removed oldest file {oldest_file.path} from regular sync due to size limit")
+            
+            # Now add the new file (after checking if it already exists)
+            for f in self.regular_sync:
+                if f.path == file.path:
+                    self.logger.debug(f"File {file} already in regular sync")
+                    return
+            self.regular_sync.add(file)
+            self.logger.debug(f"File {file} added to regular sync")
 
     def add_immediate_sync_file(self, file):
         """Add file to immediate sync"""
