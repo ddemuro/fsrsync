@@ -457,12 +457,15 @@ class SyncApplication:
             self.logger.debug(
                 f"Immediate removed destination {destination.get('remote_hostname', None)} to global server locks. Result: {notification}"
             )
-            # Remove these files from the immediate sync list
-            for file in self.fs_monitor.get_immediate_sync_files():
+            # Remove these files from the immediate sync list (only the ones that were synced)
+            for file in filtered_files:
                 file.synced_successfully = True
                 file.synced_time = time_sync_start
                 self.files_to_delete_after_sync_immediate.append(file)
-                destination.get("web_client").delete_file_pending_for_path(file.path)
+                try:
+                    destination.get("web_client").delete_file_pending_for_path(file.path)
+                except Exception as e:
+                    self.logger.error(f"Error deleting file from web client: {e}")
             self.statistics_generator(
                 destination,
                 self.fs_monitor.get_regular_sync_files(destination_path),
@@ -541,12 +544,16 @@ class SyncApplication:
                 notification_result=notification,
                 log_type="regular",
             )
-            # Remove these files from the regular sync list
+            # Remove these files from the regular sync list (only the ones that were included in sync)
             for file in events:
-                file.synced_successfully = True
-                file.synced_time = time_sync_start
-                self.files_to_delete_after_sync_regular.append(file)
-                destination.get("web_client").delete_file_pending_for_path(file.path)
+                if file.path in include:
+                    file.synced_successfully = True
+                    file.synced_time = time_sync_start
+                    self.files_to_delete_after_sync_regular.append(file)
+                    try:
+                        destination.get("web_client").delete_file_pending_for_path(file.path)
+                    except Exception as e:
+                        self.logger.error(f"Error deleting file from web client: {e}")
 
     def manage_destination_event(self, destination):
         """Manage events for a destination"""

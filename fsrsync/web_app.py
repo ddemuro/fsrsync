@@ -210,24 +210,26 @@ class WebControl:
             """Get detailed runtime statistics"""
             try:
                 result = []
-                
+
                 with self._lock:
                     for destination in self.sync_state.destinations:
                         # Create a clean copy without circular references
                         dest_info = {
                             "destination": destination.get("path", ""),
+                            "destination_remote": destination["rsync_manager"].destination,
                             "event_queue_limit": destination.get("event_queue_limit"),
                             "locked_on_sync": destination.get("locked_on_sync", False),
                             "use_global_server_lock": destination.get("use_global_server_lock", False),
                             "notify_file_locks": destination.get("notify_file_locks", False),
                             "remote_hostname": destination.get("remote_hostname"),
                             "max_wait_locked": destination.get("max_wait_locked"),
+                            "last_full_sync": str(destination.get("location_last_full_sync")) if destination.get("location_last_full_sync") else None,
                         }
                         result.append(dest_info)
-                    
+
                     # Get aggregate events in a clean format
                     aggregate_events = self.sync_state.fs_monitor.get_aggregated_events()
-                    
+
                     # Convert complex objects to serializable strings where needed
                     server_locks = [
                         {
@@ -240,7 +242,7 @@ class WebControl:
                         }
                         for lock in self.sync_state.global_server_locks
                     ]
-                    
+
                     # Format other data for clean JSON output
                     return {
                         "result": result,
@@ -252,9 +254,62 @@ class WebControl:
                         "max_stats": self.sync_state.max_stats,
                         "full_sync": self.sync_state.full_sync,
                         "aggregated_events": aggregate_events,
+                        "hostname": self.sync_state.hostname,
                     }
             except Exception as e:
                 self.logger.error(f"Error getting runtime stats: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/health")
+        async def health():
+            """Health check endpoint (no authentication required)"""
+            return {"status": "healthy", "hostname": self.sync_state.hostname}
+
+        @self.app.post("/trigger_sync")
+        async def trigger_sync(request: FilePathRequest, _: bool = Depends(verify_secret_header)):
+            """Manually trigger a sync for a specific path"""
+            try:
+                path = request.path
+                triggered = False
+                with self._lock:
+                    for destination in self.sync_state.destinations:
+                        if destination.get("path") == path:
+                            # Trigger sync by setting locked_on_sync to False if it's stuck
+                            if destination.get("locked_on_sync"):
+                                self.logger.info(f"Path {path} is currently locked, cannot trigger sync")
+                                return {"status": "locked", "message": f"Destination {path} is currently syncing"}
+                            triggered = True
+                            break
+
+                if triggered:
+                    self.logger.info(f"Manually triggered sync for path: {path}")
+                    return {"status": "triggered", "path": path}
+                else:
+                    return {"status": "not_found", "message": f"Path {path} not found in destinations"}
+            except Exception as e:
+                self.logger.error(f"Error triggering sync: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/pending_files_by_path")
+        async def pending_files_by_path(path: str = Query(...), _: bool = Depends(verify_secret_query)):
+            """Get pending files for a specific path"""
+            try:
+                with self._lock:
+                    immediate = self.sync_state.fs_monitor.get_immediate_sync_files(path)
+                    regular = self.sync_state.fs_monitor.get_regular_sync_files(path)
+                    locked = self.sync_state.fs_monitor.get_locked_files_for_path(path)
+
+                    return {
+                        "path": path,
+                        "immediate_count": len(immediate),
+                        "regular_count": len(regular),
+                        "locked_count": len(locked),
+                        "immediate_files": [f.path for f in immediate],
+                        "regular_files": [f.path for f in regular],
+                        "locked_files": [f.path for f in locked],
+                    }
+            except Exception as e:
+                self.logger.error(f"Error getting pending files by path: {str(e)}")
                 raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
     def run(self):

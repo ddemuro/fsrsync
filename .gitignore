@@ -8,3 +8,19 @@ build/
 *.log
 setup.py.bak
 test/destination
+
+# Claude Code files
+CLAUDE.md
+.claude/
+*.claude
+
+# AI and LLM files
+.cursor/
+.cursorrules
+.copilot/
+.aider*
+.continue/
+
+# IDE
+.vscode/
+.idea/

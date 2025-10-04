@@ -21,6 +21,17 @@ function test() {
     SUCCESS="0"
     echo "Running tests... for $1"
 
+    # Run unit tests first
+    echo "Running unit tests with pytest..."
+    if command -v pytest &> /dev/null; then
+        pytest test/ -v || {
+            echo "Unit tests failed!"
+            SUCCESS="$SUCCESS,1"
+        }
+    else
+        echo "pytest not found, skipping unit tests"
+    fi
+
     echo "Starting the client to receive files from the server..."
     export OPERATION="server"
     docker compose build server
@@ -28,7 +39,8 @@ function test() {
     docker compose build client
 
     # Cleanup the test directories
-    rm -r test/destination/*
+    rm -rf test/destination/*
+    mkdir -p test/destination
 
     # Run the client
     docker compose up client &disown
@@ -116,6 +128,63 @@ function qrt() {
     docker compose down server
 }
 
+# Run unit tests in Docker
+function test_unit() {
+    echo "Running unit tests in Docker..."
+    docker compose -f docker-compose.test.yml build test-server
+    docker compose -f docker-compose.test.yml run --rm test-server
+    EXIT_CODE=$?
+    docker compose -f docker-compose.test.yml down
+    return $EXIT_CODE
+}
+
+# Run performance tests
+function test_perf() {
+    echo "Running performance tests in Docker..."
+    docker compose -f docker-compose.test.yml build perf-test
+    docker compose -f docker-compose.test.yml run --rm perf-test
+    EXIT_CODE=$?
+    docker compose -f docker-compose.test.yml down
+    return $EXIT_CODE
+}
+
+# Run all tests (unit + integration)
+function test_all() {
+    echo "Running all tests..."
+
+    # Run unit tests
+    echo "=== Unit Tests ==="
+    test_unit
+    UNIT_EXIT=$?
+
+    # Run integration tests
+    echo "=== Integration Tests ==="
+    test sync
+    INTEGRATION_EXIT=$?
+
+    # Run performance tests
+    echo "=== Performance Tests ==="
+    test_perf
+    PERF_EXIT=$?
+
+    # Summary
+    echo ""
+    echo "========================================="
+    echo "Test Summary:"
+    echo "  Unit Tests: $([ $UNIT_EXIT -eq 0 ] && echo 'PASSED' || echo 'FAILED')"
+    echo "  Integration Tests: $([ $INTEGRATION_EXIT -eq 0 ] && echo 'PASSED' || echo 'FAILED')"
+    echo "  Performance Tests: $([ $PERF_EXIT -eq 0 ] && echo 'PASSED' || echo 'FAILED')"
+    echo "========================================="
+
+    if [ $UNIT_EXIT -eq 0 ] && [ $INTEGRATION_EXIT -eq 0 ] && [ $PERF_EXIT -eq 0 ]; then
+        echo "All tests PASSED! ✓"
+        return 0
+    else
+        echo "Some tests FAILED! ✗"
+        return 1
+    fi
+}
+
 # Check for arguments
 echo "Args: 1: $1, 2: $2, 3: $3, 4: $4"
 while [[ $# -gt 0 ]]; do
@@ -146,8 +215,17 @@ while [[ $# -gt 0 ]]; do
         qrt)
             qrt
             ;;
+        test-unit)
+            test_unit
+            ;;
+        test-perf)
+            test_perf
+            ;;
+        test-all)
+            test_all
+            ;;
         *)
-            echo "Error: Only 'run', 'test', 'build', 'exec', or 'qrt' are valid arguments."
+            echo "Error: Valid arguments are: 'run', 'test', 'build', 'exec', 'qrt', 'test-unit', 'test-perf', 'test-all'"
             exit 1
             ;;
     esac

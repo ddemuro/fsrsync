@@ -1,0 +1,14 @@
+{
+  "timestamp": "2025-10-02T08:08:56.839254",
+  "summary": {
+    "total_errors": 5,
+    "status": "FAILED"
+  },
+  "errors": [
+    "Failed to import FilesystemMonitor: No module named 'psutil'",
+    "Failed to import WebControl: No module named 'uvicorn'",
+    "Functionality test failed: No module named 'psutil'",
+    "Thread safety test failed: No module named 'psutil'",
+    "Performance test failed: No module named 'psutil'"
+  ]
+}

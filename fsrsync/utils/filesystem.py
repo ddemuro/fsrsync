@@ -77,10 +77,13 @@ class FilesystemMonitor:
                 self.logger.error(f"Error closing inotify_watcher: {e}")
 
     def get_aggregated_events(self):
-        """Return all events"""
-        immediate = [f.path for f in self.immediate_sync]
-        regular = [f.path for f in self.regular_sync]
-        locked = [f.path for f in self.open_files]
+        """Return all events with thread safety"""
+        with self.immediate_sync_lock:
+            immediate = [f.path for f in self.immediate_sync]
+        with self.regular_sync_lock:
+            regular = [f.path for f in self.regular_sync]
+        with self.open_files_lock:
+            locked = [f.path for f in self.open_files]
         return {"immediate": immediate, "regular": regular, "locked": locked}
 
     def add_watch(self, path, events):
@@ -221,43 +224,47 @@ class FilesystemMonitor:
             self.logger.debug(f"File {file.path} removed from locked files, it is no longer open")
 
     def clear_locks_exceeded_wait(self, path, max_wait_locked):
-        """Clear locks that have exceeded the wait time"""
+        """Clear locks that have exceeded the wait time with thread safety"""
         to_remove = []
         non_exceeded_for_path = []
-        for file in self.open_files:
-            if file.path.startswith(path) and file.how_long_locked() > max_wait_locked:
-                to_remove.append(file)
-            if file.path.startswith(path) and file.how_long_locked() <= max_wait_locked:
-                non_exceeded_for_path.append(file)
-        for file in to_remove:
-            self.open_files.discard(file)
-            self.logger.debug(f"File {file.path} removed from locked files")
+        with self.open_files_lock:
+            for file in self.open_files:
+                if file.path.startswith(path) and file.how_long_locked() > max_wait_locked:
+                    to_remove.append(file)
+                if file.path.startswith(path) and file.how_long_locked() <= max_wait_locked:
+                    non_exceeded_for_path.append(file)
+            for file in to_remove:
+                self.open_files.discard(file)
+                self.logger.debug(f"File {file.path} removed from locked files")
         return non_exceeded_for_path
 
     def get_locked_files_for_path(self, path):
-        """Return locked files in a given path"""
+        """Return locked files in a given path with thread safety"""
         locked_files = []
-        for file in self.open_files:
-            if path:
-                if file.path.startswith(path):
+        with self.open_files_lock:
+            for file in self.open_files:
+                if path:
+                    if file.path.startswith(path):
+                        locked_files.append(file)
+                else:
                     locked_files.append(file)
-            else:
-                locked_files.append(file)
         return locked_files
 
     def get_locked_files(self):
-        """Return locked files"""
-        return self.open_files
+        """Return locked files with thread safety"""
+        with self.open_files_lock:
+            return list(self.open_files)
 
     def get_immediate_sync_files(self, path_filter=None):
-        """Return files that need immediate sync"""
+        """Return files that need immediate sync with thread safety"""
         imm_sync = []
-        for f in self.immediate_sync:
-            if path_filter:
-                if f.path.startswith(path_filter):
+        with self.immediate_sync_lock:
+            for f in self.immediate_sync:
+                if path_filter:
+                    if f.path.startswith(path_filter):
+                        imm_sync.append(f)
+                else:
                     imm_sync.append(f)
-            else:
-                imm_sync.append(f)
         return imm_sync
 
     def clear_immediate_sync_files(self):
@@ -265,17 +272,19 @@ class FilesystemMonitor:
         self.immediate_sync.clear()
 
     def delete_immediate_sync_file(self, path, delete_up_to_time=None):
-        """Delete file from immediate sync"""
+        """Delete file from immediate sync with thread safety"""
         to_remove = []
-        for f in self.immediate_sync:
-            if f.path == path:
-                if delete_up_to_time is None:
-                    to_remove.append(f)
-                elif f.start_time < delete_up_to_time:
-                    to_remove.append(f)
-        for f in to_remove:
-            self.immediate_sync.discard(f)
-        self.logger.debug(f"File {path} removed from immediate sync")
+        with self.immediate_sync_lock:
+            for f in self.immediate_sync:
+                if f.path == path:
+                    if delete_up_to_time is None:
+                        to_remove.append(f)
+                    elif f.start_time < delete_up_to_time:
+                        to_remove.append(f)
+            for f in to_remove:
+                self.immediate_sync.discard(f)
+        if to_remove:
+            self.logger.debug(f"File {path} removed from immediate sync")
 
     def delete_locked_file(self, path, delete_up_to_time=None):
         """Delete file from locked files using path"""
@@ -296,14 +305,15 @@ class FilesystemMonitor:
         self.logger.info("Locked files cleared")
 
     def get_regular_sync_files(self, path_filter=None):
-        """Return files that need regular sync"""
+        """Return files that need regular sync with thread safety"""
         reg_sync = []
-        for f in self.regular_sync:
-            if path_filter:
-                if f.path.startswith(path_filter):
+        with self.regular_sync_lock:
+            for f in self.regular_sync:
+                if path_filter:
+                    if f.path.startswith(path_filter):
+                        reg_sync.append(f)
+                else:
                     reg_sync.append(f)
-            else:
-                reg_sync.append(f)
         return reg_sync
 
     def clear_regular_sync_files(self, path_filter=None):
@@ -327,50 +337,56 @@ class FilesystemMonitor:
         self.delete_immediate_sync_files_for_path(path)
 
     def delete_regular_sync_files_for_path(self, path, delete_up_to_time=None):
-        """Delete files that need regular sync in a given path"""
+        """Delete files that need regular sync in a given path with thread safety"""
         self.logger.debug(f"Deleting files in {path} from regular sync, with delete_up_to_time={delete_up_to_time}")
         to_remove = []
-        for f in self.regular_sync:
-            if f.path.startswith(path):
-                if delete_up_to_time is None:
-                    to_remove.append(f)
-                elif f.start_time < delete_up_to_time:
-                    to_remove.append(f)
-        for f in to_remove:
-            self.regular_sync.discard(f)
-        self.logger.debug(f"Files in {path} removed from regular sync")
+        with self.regular_sync_lock:
+            for f in self.regular_sync:
+                if f.path.startswith(path):
+                    if delete_up_to_time is None:
+                        to_remove.append(f)
+                    elif f.start_time < delete_up_to_time:
+                        to_remove.append(f)
+            for f in to_remove:
+                self.regular_sync.discard(f)
+        if to_remove:
+            self.logger.debug(f"{len(to_remove)} files in {path} removed from regular sync")
 
     def delete_immediate_sync_files_for_path(self, path, delete_up_to_time=None):
-        """Delete files that need immediate sync in a given path"""
+        """Delete files that need immediate sync in a given path with thread safety"""
         self.logger.debug(f"Deleting files in {path} from immediate sync, with delete_up_to_time={delete_up_to_time}")
         to_remove = []
-        for f in self.immediate_sync:
-            if f.path.startswith(path):
-                if delete_up_to_time is None:
-                    self.logger.debug(f"File {f} has no delete_up_to_time")
-                    to_remove.append(f)
-                elif f.start_time < delete_up_to_time:
-                    self.logger.debug(f"File {f} has start time {f.start_time} and delete_up_to_time {delete_up_to_time}")
-                    to_remove.append(f)
-        for f in to_remove:
-            self.immediate_sync.discard(f)
-        self.logger.debug(f"Files in {path} removed from immediate sync")
+        with self.immediate_sync_lock:
+            for f in self.immediate_sync:
+                if f.path.startswith(path):
+                    if delete_up_to_time is None:
+                        self.logger.debug(f"File {f} has no delete_up_to_time")
+                        to_remove.append(f)
+                    elif f.start_time < delete_up_to_time:
+                        self.logger.debug(f"File {f} has start time {f.start_time} and delete_up_to_time {delete_up_to_time}")
+                        to_remove.append(f)
+            for f in to_remove:
+                self.immediate_sync.discard(f)
+        if to_remove:
+            self.logger.debug(f"{len(to_remove)} files in {path} removed from immediate sync")
 
     def delete_regular_sync_file(self, path, delete_up_to_time=None):
-        """Delete file from regular sync"""
+        """Delete file from regular sync with thread safety"""
         self.logger.debug(f"Deleting file {path} from regular sync, with delete_up_to_time={delete_up_to_time}")
         to_remove = []
-        for f in self.regular_sync:
-            if f.path == path:
-                if delete_up_to_time is None:
-                    self.logger.debug(f"File {f} has no delete_up_to_time")
-                    to_remove.append(f)
-                elif f.start_time < delete_up_to_time:
-                    self.logger.debug(f"File {f} has start time {f.start_time} and delete_up_to_time {delete_up_to_time}")
-                    to_remove.append(f)
-        for f in to_remove:
-            self.regular_sync.discard(f)
-        self.logger.debug(f"File {path} removed from regular sync")
+        with self.regular_sync_lock:
+            for f in self.regular_sync:
+                if f.path == path:
+                    if delete_up_to_time is None:
+                        self.logger.debug(f"File {f} has no delete_up_to_time")
+                        to_remove.append(f)
+                    elif f.start_time < delete_up_to_time:
+                        self.logger.debug(f"File {f} has start time {f.start_time} and delete_up_to_time {delete_up_to_time}")
+                        to_remove.append(f)
+            for f in to_remove:
+                self.regular_sync.discard(f)
+        if to_remove:
+            self.logger.debug(f"File {path} removed from regular sync")
 
     def add_regular_sync_file(self, file):
         """Add file to regular sync with size limit"""
@@ -392,24 +408,26 @@ class FilesystemMonitor:
             self.logger.debug(f"File {file} added to regular sync")
 
     def add_immediate_sync_file(self, file):
-        """Add file to immediate sync"""
-        # Check if path already in immediate sync files
-        for f in self.immediate_sync:
-            if f.path == file.path:
-                self.logger.debug(f"File {file} already in immediate sync")
-                return
-        self.immediate_sync.add(file)
-        self.logger.debug(f"File {file} added to immediate sync")
+        """Add file to immediate sync with thread safety"""
+        with self.immediate_sync_lock:
+            # Check if path already in immediate sync files
+            for f in self.immediate_sync:
+                if f.path == file.path:
+                    self.logger.debug(f"File {file} already in immediate sync")
+                    return
+            self.immediate_sync.add(file)
+            self.logger.debug(f"File {file} added to immediate sync")
 
     def add_to_locked_files(self, file):
-        """Add file to locked files"""
-        # Return if file already exists
-        for f in self.open_files:
-            if f.path == file.path:
-                self.logger.debug(f"File {file} already in locked files")
-                return
-        self.open_files.add(file)
-        self.logger.debug(f"File {file} added to locked files")
+        """Add file to locked files with thread safety"""
+        with self.open_files_lock:
+            # Return if file already exists
+            for f in self.open_files:
+                if f.path == file.path:
+                    self.logger.debug(f"File {file} already in locked files")
+                    return
+            self.open_files.add(file)
+            self.logger.debug(f"File {file} added to locked files")
 
     def get_all_events_for_path(self, path):
         """Return all events for a given path"""

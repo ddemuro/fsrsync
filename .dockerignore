@@ -1,0 +1,68 @@
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+
+# IDE and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Claude Code and AI
+CLAUDE.md
+DOCUMENTATION.md
+.claude/
+*.claude
+.cursor/
+.cursorrules
+.copilot/
+.aider*
+.continue/
+
+# Documentation
+README.md
+*.md
+docs/
+
+# Test files (keep test/ and pytest.ini for testing)
+# test/  # Commented out - needed for testing
+# tests/  # Commented out - needed for testing
+*.test
+# pytest.ini  # Commented out - needed for testing
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+
+# Config and local files (but keep config/ for Docker)
+# config/  # Commented out - needed for Docker builds
+.env
+*.log
+*.bak
+
+# Misc
+.mypy_cache/
+.ruff_cache/
+*.tmp
+sandbox.sh
+create_new_version.sh
+installer.sh
+logo.jpg
+LICENSE

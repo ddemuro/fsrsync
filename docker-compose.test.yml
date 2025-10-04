@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  test-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: test-server
+    hostname: test-server
+    environment:
+      - OPERATION=test
+      - ENVFILE=/fsrsync/config/test.json
+      - RUN_TESTS=true
+    volumes:
+      - ./config:/fsrsync/config/
+      - ./test/source:/root/source
+      - ./test:/fsrsync/test
+      - ./fsrsync:/fsrsync/fsrsync
+    command: |
+      bash -c "
+        echo 'Running tests in Docker environment...'
+        cd /fsrsync
+        python -m pytest test/ -v --tb=short -m 'not performance' || exit 1
+        echo 'All tests passed!'
+      "
+    networks:
+      - test-net
+
+  test-client:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: test-client
+    hostname: test-client
+    environment:
+      - OPERATION=server
+      - ENVFILE=/fsrsync/config/test_client.json
+    volumes:
+      - ./config:/fsrsync/config/
+      - ./test/destination:/root/destination
+    networks:
+      - test-net
+
+  perf-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: perf-test
+    hostname: perf-test
+    environment:
+      - RUN_PERF_TESTS=true
+    volumes:
+      - ./test:/fsrsync/test
+      - ./fsrsync:/fsrsync/fsrsync
+    command: |
+      bash -c "
+        echo 'Running performance tests...'
+        cd /fsrsync
+        python -m pytest test/ -v --tb=short -m performance || exit 1
+        echo 'Performance tests passed!'
+      "
+    networks:
+      - test-net
+
+networks:
+  test-net:
+    driver: bridge
