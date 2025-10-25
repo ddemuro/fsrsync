@@ -1,0 +1,323 @@
+version: '3.8'
+
+# Multi-Host FSRsync Lab Environment
+#
+# This compose file sets up a complete multi-host synchronization lab for testing:
+# - 5 FSRsync instances (primary + 4 remotes)
+# - Network segmentation with configurable latency/bandwidth
+# - Shared volumes for testing different scenarios
+# - Monitoring and logging infrastructure
+#
+# Usage:
+#   docker-compose -f docker-compose.lab.yml up -d
+#   docker-compose -f docker-compose.lab.yml logs -f
+#   docker-compose -f docker-compose.lab.yml down -v
+
+services:
+  # ============================================================================
+  # Primary Sync Host
+  # ============================================================================
+  primary:
+    build: .
+    image: fsrsync:latest
+    container_name: fsrsync-primary
+    hostname: primary
+    environment:
+      - OPERATION=sync
+      - ENVFILE=/fsrsync/config/primary.json
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - ./config/lab:/fsrsync/config/
+      - primary_data:/data
+      - primary_logs:/var/log/fsrsync
+    ports:
+      - "8080:8080"        # Web UI
+      - "9876:9876"        # Sync protocol
+    networks:
+      lab_net:
+        ipv4_address: 10.0.1.10
+    depends_on:
+      - network-sim
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # ============================================================================
+  # Remote Sync Hosts (4x for multi-host testing)
+  # ============================================================================
+  remote-1:
+    build: .
+    image: fsrsync:latest
+    container_name: fsrsync-remote-1
+    hostname: remote-1
+    environment:
+      - OPERATION=sync
+      - ENVFILE=/fsrsync/config/remote-1.json
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./config/lab:/fsrsync/config/
+      - remote1_data:/data
+      - remote1_logs:/var/log/fsrsync
+    ports:
+      - "8081:8080"        # Web UI (mapped to 8081)
+      - "9877:9876"        # Sync protocol (mapped to 9877)
+    networks:
+      lab_net:
+        ipv4_address: 10.0.1.11
+    depends_on:
+      - primary
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  remote-2:
+    build: .
+    image: fsrsync:latest
+    container_name: fsrsync-remote-2
+    hostname: remote-2
+    environment:
+      - OPERATION=sync
+      - ENVFILE=/fsrsync/config/remote-2.json
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./config/lab:/fsrsync/config/
+      - remote2_data:/data
+      - remote2_logs:/var/log/fsrsync
+    ports:
+      - "8082:8080"
+      - "9878:9876"
+    networks:
+      lab_net:
+        ipv4_address: 10.0.1.12
+    depends_on:
+      - primary
+
+  remote-3:
+    build: .
+    image: fsrsync:latest
+    container_name: fsrsync-remote-3
+    hostname: remote-3
+    environment:
+      - OPERATION=sync
+      - ENVFILE=/fsrsync/config/remote-3.json
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./config/lab:/fsrsync/config/
+      - remote3_data:/data
+      - remote3_logs:/var/log/fsrsync
+    ports:
+      - "8083:8080"
+      - "9879:9876"
+    networks:
+      lab_net:
+        ipv4_address: 10.0.1.13
+    depends_on:
+      - primary
+
+  remote-4:
+    build: .
+    image: fsrsync:latest
+    container_name: fsrsync-remote-4
+    hostname: remote-4
+    environment:
+      - OPERATION=sync
+      - ENVFILE=/fsrsync/config/remote-4.json
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./config/lab:/fsrsync/config/
+      - remote4_data:/data
+      - remote4_logs:/var/log/fsrsync
+    ports:
+      - "8084:8080"
+      - "9880:9876"
+    networks:
+      lab_net:
+        ipv4_address: 10.0.1.14
+    depends_on:
+      - primary
+
+  # ============================================================================
+  # Monitoring Infrastructure
+  # ============================================================================
+
+  # Network Simulator (for latency/bandwidth testing)
+  network-sim:
+    image: busybox:latest
+    container_name: fsrsync-network-sim
+    command: sleep infinity
+    networks:
+      lab_net:
+        ipv4_address: 10.0.1.100
+    cap_add:
+      - NET_ADMIN
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: fsrsync-prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      lab_net:
+        ipv4_address: 10.0.1.101
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=24h'
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: fsrsync-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    networks:
+      lab_net:
+        ipv4_address: 10.0.1.102
+    depends_on:
+      - prometheus
+
+  # ELK Stack for centralized logging
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.0.0
+    container_name: fsrsync-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    networks:
+      lab_net:
+        ipv4_address: 10.0.1.103
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9200"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.0.0
+    container_name: fsrsync-kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    networks:
+      lab_net:
+        ipv4_address: 10.0.1.104
+    depends_on:
+      - elasticsearch
+
+  # Filebeat for log collection
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.0.0
+    container_name: fsrsync-filebeat
+    user: root
+    volumes:
+      - ./monitoring/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - primary_logs:/var/log/fsrsync/primary:ro
+      - remote1_logs:/var/log/fsrsync/remote-1:ro
+      - remote2_logs:/var/log/fsrsync/remote-2:ro
+      - remote3_logs:/var/log/fsrsync/remote-3:ro
+      - remote4_logs:/var/log/fsrsync/remote-4:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: filebeat -e -strict.perms=false
+    networks:
+      lab_net:
+        ipv4_address: 10.0.1.105
+    depends_on:
+      - elasticsearch
+
+  # ============================================================================
+  # Test Orchestration
+  # ============================================================================
+
+  # Test Runner
+  test-runner:
+    build:
+      context: .
+      dockerfile: test/Dockerfile.test
+    container_name: fsrsync-test-runner
+    environment:
+      - PYTHONUNBUFFERED=1
+      - TEST_ENVIRONMENT=docker
+    volumes:
+      - ./test:/tests:ro
+      - ./test/results:/test-results
+      - test_runner_cache:/root/.pytest_cache
+    networks:
+      lab_net:
+        ipv4_address: 10.0.1.110
+    depends_on:
+      primary:
+        condition: service_healthy
+      remote-1:
+        condition: service_healthy
+    command: pytest /tests -v --tb=short --junit-xml=/test-results/results.xml
+
+# ============================================================================
+# Networks
+# ============================================================================
+networks:
+  lab_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.1.0/24
+
+# ============================================================================
+# Named Volumes
+# ============================================================================
+volumes:
+  # Primary and remote data volumes
+  primary_data:
+    driver: local
+  primary_logs:
+    driver: local
+  remote1_data:
+    driver: local
+  remote1_logs:
+    driver: local
+  remote2_data:
+    driver: local
+  remote2_logs:
+    driver: local
+  remote3_data:
+    driver: local
+  remote3_logs:
+    driver: local
+  remote4_data:
+    driver: local
+  remote4_logs:
+    driver: local
+
+  # Monitoring volumes
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  elasticsearch_data:
+    driver: local
+
+  # Test infrastructure
+  test_runner_cache:
+    driver: local
