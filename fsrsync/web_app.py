@@ -108,6 +108,25 @@ try:
 except ImportError:
     HAS_REPORT_GENERATOR = False
 
+# Optional performance regression and streaming modules
+try:
+    from .utils.regression_tester import RegressionTester
+    HAS_REGRESSION_TESTER = True
+except ImportError:
+    HAS_REGRESSION_TESTER = False
+
+try:
+    from .utils.performance_streamer import PerformanceStreamer
+    HAS_PERFORMANCE_STREAMER = True
+except ImportError:
+    HAS_PERFORMANCE_STREAMER = False
+
+try:
+    from .utils.io_analyzer import IOAnalyzer
+    HAS_IO_ANALYZER = True
+except ImportError:
+    HAS_IO_ANALYZER = False
+
 # Define request models for better validation
 class ServerLockRequest(BaseModel):
     server: str
@@ -386,6 +405,45 @@ class WebControl:
                         self.logger.warning(f"Failed to initialize ReportGenerator: {e}")
                 else:
                     self.logger.debug("ReportGenerator not available")
+
+                # Initialize RegressionTester if available
+                self.regression_tester = None
+                if HAS_REGRESSION_TESTER:
+                    try:
+                        self.regression_tester = RegressionTester(
+                            logger_instance=self.logger
+                        )
+                        self.logger.info("RegressionTester initialized successfully")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to initialize RegressionTester: {e}")
+                else:
+                    self.logger.debug("RegressionTester not available")
+
+                # Initialize PerformanceStreamer if available
+                self.performance_streamer = None
+                if HAS_PERFORMANCE_STREAMER:
+                    try:
+                        self.performance_streamer = PerformanceStreamer(
+                            logger_instance=self.logger
+                        )
+                        self.logger.info("PerformanceStreamer initialized successfully")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to initialize PerformanceStreamer: {e}")
+                else:
+                    self.logger.debug("PerformanceStreamer not available")
+
+                # Initialize IOAnalyzer if available
+                self.io_analyzer = None
+                if HAS_IO_ANALYZER:
+                    try:
+                        self.io_analyzer = IOAnalyzer(
+                            logger_instance=self.logger
+                        )
+                        self.logger.info("IOAnalyzer initialized successfully")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to initialize IOAnalyzer: {e}")
+                else:
+                    self.logger.debug("IOAnalyzer not available")
 
                 self.setup_routes()
                 self.initialized = True
@@ -1424,6 +1482,287 @@ class WebControl:
                     return json.loads(report_content) if report_content else {}
             except Exception as e:
                 self.logger.error(f"Error getting report: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        # Regression Testing Endpoints
+        @self.app.post("/api/regression/baseline")
+        async def establish_baseline(metric_name: str = Query(...),
+                                    commit_hash: str = Query(...),
+                                    values: List[float] = Query(...),
+                                    _: bool = Depends(verify_secret_query)):
+            """Establish performance baseline"""
+            try:
+                if not self.regression_tester:
+                    return {"error": "Regression tester not available"}
+
+                baseline_id = self.regression_tester.establish_baseline(
+                    metric_name, commit_hash, values
+                )
+
+                return {
+                    "status": "success",
+                    "baseline_id": baseline_id,
+                    "metric": metric_name,
+                    "commit": commit_hash,
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error establishing baseline: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.post("/api/regression/measure")
+        async def record_measurement(metric_name: str = Query(...),
+                                    value: float = Query(...),
+                                    commit_hash: str = Query(None),
+                                    _: bool = Depends(verify_secret_query)):
+            """Record performance measurement"""
+            try:
+                if not self.regression_tester:
+                    return {"error": "Regression tester not available"}
+
+                self.regression_tester.record_measurement(metric_name, value, commit_hash)
+
+                return {
+                    "status": "success",
+                    "metric": metric_name,
+                    "value": value,
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error recording measurement: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/regression/detect")
+        async def detect_regression(metric_name: str = Query(...),
+                                   method: str = Query("threshold"),
+                                   _: bool = Depends(verify_secret_query)):
+            """Detect performance regression"""
+            try:
+                if not self.regression_tester:
+                    return {"error": "Regression tester not available"}
+
+                result = self.regression_tester.detect_regression(metric_name)
+
+                if not result:
+                    return {"status": "no_data", "metric": metric_name}
+
+                return {
+                    "status": "success",
+                    "metric": result.metric_name,
+                    "is_regression": result.is_regression,
+                    "severity": result.severity.value,
+                    "percent_change": result.percent_change,
+                    "confidence": result.confidence,
+                    "action": result.recommended_action,
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error detecting regression: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/regression/report")
+        async def get_regression_report(metric_name: str = Query(None),
+                                       _: bool = Depends(verify_secret_query)):
+            """Get regression analysis report"""
+            try:
+                if not self.regression_tester:
+                    return {"error": "Regression tester not available"}
+
+                report = self.regression_tester.get_regression_report(metric_name)
+
+                return {
+                    "status": "success",
+                    "report": report,
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error getting regression report: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        # Performance Streaming Endpoints
+        @self.app.post("/api/stream/register")
+        async def register_stream_client(client_id: str = Query(...),
+                                        update_interval: int = Query(1000),
+                                        _: bool = Depends(verify_secret_query)):
+            """Register client for performance streaming"""
+            try:
+                if not self.performance_streamer:
+                    return {"error": "Performance streamer not available"}
+
+                success = self.performance_streamer.register_client(client_id, update_interval)
+
+                return {
+                    "status": "success" if success else "failed",
+                    "client_id": client_id,
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error registering client: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.post("/api/stream/subscribe")
+        async def subscribe_stream(client_id: str = Query(...),
+                                  streams: str = Query(...),
+                                  metrics_filter: str = Query(None),
+                                  _: bool = Depends(verify_secret_query)):
+            """Subscribe client to performance streams"""
+            try:
+                if not self.performance_streamer:
+                    return {"error": "Performance streamer not available"}
+
+                stream_list = streams.split(',')
+                filter_list = metrics_filter.split(',') if metrics_filter else None
+
+                success = self.performance_streamer.subscribe_client(
+                    client_id, stream_list, filter_list
+                )
+
+                return {
+                    "status": "success" if success else "failed",
+                    "client_id": client_id,
+                    "streams": stream_list,
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error subscribing to streams: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/stream/updates")
+        async def get_stream_updates(client_id: str = Query(...),
+                                    _: bool = Depends(verify_secret_query)):
+            """Get pending stream updates for client"""
+            try:
+                if not self.performance_streamer:
+                    return {"error": "Performance streamer not available"}
+
+                updates = self.performance_streamer.get_client_updates(client_id)
+
+                return {
+                    "status": "success",
+                    "updates": updates,
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error getting stream updates: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/stream/summary")
+        async def get_stream_summary(_: bool = Depends(verify_secret_query)):
+            """Get performance streaming summary"""
+            try:
+                if not self.performance_streamer:
+                    return {"error": "Performance streamer not available"}
+
+                summary = self.performance_streamer.get_streaming_summary()
+
+                return {
+                    "status": "success",
+                    "summary": summary,
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error getting stream summary: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        # I/O Performance Analysis Endpoints
+        @self.app.post("/api/io/record")
+        async def record_io_operation(operation_type: str = Query(...),
+                                     path: str = Query(...),
+                                     duration: float = Query(...),
+                                     size: int = Query(0),
+                                     success: bool = Query(True),
+                                     _: bool = Depends(verify_secret_query)):
+            """Record I/O operation"""
+            try:
+                if not self.io_analyzer:
+                    return {"error": "I/O analyzer not available"}
+
+                self.io_analyzer.record_operation(
+                    operation_type, path, duration, size, success
+                )
+
+                return {
+                    "status": "success",
+                    "operation": operation_type,
+                    "path": path,
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error recording I/O operation: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/io/metrics")
+        async def get_io_metrics(operation_type: str = Query(None),
+                                _: bool = Depends(verify_secret_query)):
+            """Get I/O performance metrics"""
+            try:
+                if not self.io_analyzer:
+                    return {"error": "I/O analyzer not available"}
+
+                metrics = self.io_analyzer.get_operation_metrics(operation_type)
+
+                return {
+                    "status": "success",
+                    "metrics": metrics,
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error getting I/O metrics: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/io/bottlenecks")
+        async def get_io_bottlenecks(_: bool = Depends(verify_secret_query)):
+            """Get I/O bottleneck analysis"""
+            try:
+                if not self.io_analyzer:
+                    return {"error": "I/O analyzer not available"}
+
+                bottlenecks = self.io_analyzer.identify_bottlenecks()
+
+                return {
+                    "status": "success",
+                    "bottlenecks": bottlenecks,
+                    "count": len(bottlenecks),
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error getting I/O bottlenecks: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/io/patterns")
+        async def get_io_patterns(_: bool = Depends(verify_secret_query)):
+            """Get file access patterns"""
+            try:
+                if not self.io_analyzer:
+                    return {"error": "I/O analyzer not available"}
+
+                patterns = self.io_analyzer.detect_access_patterns()
+
+                return {
+                    "status": "success",
+                    "patterns": patterns,
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error detecting I/O patterns: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/io/summary")
+        async def get_io_summary(_: bool = Depends(verify_secret_query)):
+            """Get I/O system summary"""
+            try:
+                if not self.io_analyzer:
+                    return {"error": "I/O analyzer not available"}
+
+                summary = self.io_analyzer.get_io_summary()
+
+                return {
+                    "status": "success",
+                    "summary": summary,
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error getting I/O summary: {str(e)}")
                 raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
     def run(self):
