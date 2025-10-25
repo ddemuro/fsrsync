@@ -89,6 +89,25 @@ try:
 except ImportError:
     HAS_PROFILER = False
 
+# Optional analytics and dashboard modules
+try:
+    from .utils.analytics_engine import AnalyticsEngine
+    HAS_ANALYTICS_ENGINE = True
+except ImportError:
+    HAS_ANALYTICS_ENGINE = False
+
+try:
+    from .utils.dashboard_framework import DashboardBuilder
+    HAS_DASHBOARD_BUILDER = True
+except ImportError:
+    HAS_DASHBOARD_BUILDER = False
+
+try:
+    from .utils.report_generator import ReportGenerator
+    HAS_REPORT_GENERATOR = True
+except ImportError:
+    HAS_REPORT_GENERATOR = False
+
 # Define request models for better validation
 class ServerLockRequest(BaseModel):
     server: str
@@ -328,6 +347,45 @@ class WebControl:
                         self.logger.warning(f"Failed to initialize PerformanceAnalyzer: {e}")
                 else:
                     self.logger.debug("PerformanceAnalyzer not available")
+
+                # Initialize AnalyticsEngine if available
+                self.analytics_engine = None
+                if HAS_ANALYTICS_ENGINE:
+                    try:
+                        self.analytics_engine = AnalyticsEngine(
+                            logger_instance=self.logger
+                        )
+                        self.logger.info("AnalyticsEngine initialized successfully")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to initialize AnalyticsEngine: {e}")
+                else:
+                    self.logger.debug("AnalyticsEngine not available")
+
+                # Initialize DashboardBuilder if available
+                self.dashboard_builder = None
+                if HAS_DASHBOARD_BUILDER:
+                    try:
+                        self.dashboard_builder = DashboardBuilder(
+                            logger_instance=self.logger
+                        )
+                        self.logger.info("DashboardBuilder initialized successfully")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to initialize DashboardBuilder: {e}")
+                else:
+                    self.logger.debug("DashboardBuilder not available")
+
+                # Initialize ReportGenerator if available
+                self.report_generator = None
+                if HAS_REPORT_GENERATOR:
+                    try:
+                        self.report_generator = ReportGenerator(
+                            logger_instance=self.logger
+                        )
+                        self.logger.info("ReportGenerator initialized successfully")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to initialize ReportGenerator: {e}")
+                else:
+                    self.logger.debug("ReportGenerator not available")
 
                 self.setup_routes()
                 self.initialized = True
@@ -1176,6 +1234,196 @@ class WebControl:
                 }
             except Exception as e:
                 self.logger.error(f"Error getting chaos history: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        # ========== Analytics & Dashboard Endpoints ==========
+
+        @self.app.get("/api/analytics/summary")
+        async def get_analytics_summary(_: bool = Depends(verify_secret_query)):
+            """Get analytics summary"""
+            try:
+                if not self.analytics_engine:
+                    return {"status": "disabled", "message": "Analytics engine not enabled"}
+
+                summary = self.analytics_engine.get_analytics_summary()
+                return {"status": "success", "analytics": summary, "timestamp": time.time()}
+            except Exception as e:
+                self.logger.error(f"Error getting analytics summary: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/analytics/trends")
+        async def get_trends(metric_name: str = Query(""),
+                            lookback_seconds: int = Query(3600, ge=60, le=604800),
+                            _: bool = Depends(verify_secret_query)):
+            """Get trend analysis for metric"""
+            try:
+                if not self.analytics_engine or not metric_name:
+                    return {"trends": {}}
+
+                trend = self.analytics_engine.get_trend(metric_name, lookback_seconds)
+
+                if not trend:
+                    return {"trends": {}, "message": "No trend data available"}
+
+                return {
+                    "status": "success",
+                    "metric": metric_name,
+                    "trend": {
+                        'direction': trend.direction.value,
+                        'slope': trend.slope,
+                        'percent_change': trend.percent_change,
+                        'confidence': trend.confidence
+                    },
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error getting trends: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/analytics/anomalies")
+        async def get_anomalies(metric_name: str = Query(""),
+                               lookback_seconds: int = Query(3600, ge=60, le=604800),
+                               _: bool = Depends(verify_secret_query)):
+            """Get anomaly detection results"""
+            try:
+                if not self.analytics_engine or not metric_name:
+                    return {"anomalies": []}
+
+                anomalies = self.analytics_engine.detect_anomalies(metric_name, lookback_seconds)
+
+                return {
+                    "status": "success",
+                    "metric": metric_name,
+                    "anomalies": [
+                        {
+                            'value': a.value,
+                            'expected': a.expected_value,
+                            'deviation_std': a.deviation_std,
+                            'severity': a.severity,
+                            'timestamp': a.timestamp
+                        }
+                        for a in anomalies
+                    ],
+                    "count": len(anomalies),
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error getting anomalies: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/analytics/forecast")
+        async def get_forecast(metric_name: str = Query(""),
+                              method: str = Query("linear", regex="^(linear|exponential)$"),
+                              _: bool = Depends(verify_secret_query)):
+            """Get forecast for metric"""
+            try:
+                if not self.analytics_engine or not metric_name:
+                    return {"forecast": {}}
+
+                forecast = self.analytics_engine.forecast(metric_name, method)
+
+                if not forecast:
+                    return {"forecast": {}, "message": "No forecast data available"}
+
+                return {
+                    "status": "success",
+                    "metric": metric_name,
+                    "forecast": {
+                        'current_value': forecast.current_value,
+                        'predicted_value': forecast.predicted_value,
+                        'confidence_interval': forecast.confidence_interval,
+                        'accuracy': forecast.accuracy,
+                        'time_period_seconds': forecast.time_period
+                    },
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error getting forecast: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/dashboards")
+        async def list_dashboards(_: bool = Depends(verify_secret_query)):
+            """List all dashboards"""
+            try:
+                if not self.dashboard_builder:
+                    return {"dashboards": []}
+
+                dashboards = self.dashboard_builder.get_dashboard_list()
+
+                return {
+                    "status": "success",
+                    "dashboards": dashboards,
+                    "count": len(dashboards),
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error listing dashboards: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/dashboards/{dashboard_id}")
+        async def get_dashboard(dashboard_id: str, _: bool = Depends(verify_secret_query)):
+            """Get dashboard data"""
+            try:
+                if not self.dashboard_builder:
+                    return {"dashboard": {}}
+
+                dashboard_data = self.dashboard_builder.get_dashboard_data(dashboard_id)
+
+                if not dashboard_data:
+                    return {"dashboard": {}, "message": "Dashboard not found"}
+
+                return {
+                    "status": "success",
+                    "dashboard": {
+                        'dashboard_id': dashboard_data.dashboard_id,
+                        'widgets': dashboard_data.widgets,
+                        'timestamp': dashboard_data.timestamp
+                    }
+                }
+            except Exception as e:
+                self.logger.error(f"Error getting dashboard: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/reports")
+        async def list_reports(_: bool = Depends(verify_secret_query)):
+            """List all reports"""
+            try:
+                if not self.report_generator:
+                    return {"reports": []}
+
+                summary = self.report_generator.get_report_summary()
+
+                return {
+                    "status": "success",
+                    "summary": summary,
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error listing reports: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/reports/{report_id}")
+        async def get_report(report_id: str,
+                            format_type: str = Query("json", regex="^(json|html|markdown)$"),
+                            _: bool = Depends(verify_secret_query)):
+            """Get report in specified format"""
+            try:
+                if not self.report_generator:
+                    return {"report": {}}
+
+                report_content = self.report_generator.export_report(report_id)
+
+                if not report_content:
+                    return {"report": {}, "message": "Report not found"}
+
+                if format_type == "html":
+                    return HTMLResponse(content=report_content)
+                elif format_type == "markdown":
+                    return {"report": report_content, "format": "markdown"}
+                else:  # json
+                    return json.loads(report_content) if report_content else {}
+            except Exception as e:
+                self.logger.error(f"Error getting report: {str(e)}")
                 raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
     def run(self):
