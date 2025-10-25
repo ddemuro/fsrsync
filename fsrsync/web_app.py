@@ -21,6 +21,18 @@ try:
 except ImportError:
     HAS_SYNC_COORDINATOR = False
 
+try:
+    from .utils.health_check import HealthChecker
+    HAS_HEALTH_CHECK = True
+except ImportError:
+    HAS_HEALTH_CHECK = False
+
+try:
+    from .utils.logging_aggregator import LogAggregator
+    HAS_LOGGING_AGGREGATOR = True
+except ImportError:
+    HAS_LOGGING_AGGREGATOR = False
+
 # Define request models for better validation
 class ServerLockRequest(BaseModel):
     server: str
@@ -97,6 +109,34 @@ class WebControl:
                         self.logger.warning(f"Failed to initialize SyncCoordinator: {e}")
                 else:
                     self.logger.debug("SyncCoordinator not available")
+
+                # Initialize HealthChecker if available
+                self.health_checker = None
+                if HAS_HEALTH_CHECK:
+                    try:
+                        self.health_checker = HealthChecker(
+                            coordinator=self.sync_coordinator,
+                            logger_instance=self.logger
+                        )
+                        self.logger.info("HealthChecker initialized successfully")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to initialize HealthChecker: {e}")
+                else:
+                    self.logger.debug("HealthChecker not available")
+
+                # Initialize LogAggregator if available
+                self.log_aggregator = None
+                if HAS_LOGGING_AGGREGATOR:
+                    try:
+                        self.log_aggregator = LogAggregator(
+                            max_entries=10000,
+                            logger_instance=self.logger
+                        )
+                        self.logger.info("LogAggregator initialized successfully")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to initialize LogAggregator: {e}")
+                else:
+                    self.logger.debug("LogAggregator not available")
 
                 self.setup_routes()
                 self.initialized = True
@@ -614,6 +654,138 @@ class WebControl:
                 }
             except Exception as e:
                 self.logger.error(f"Error getting metrics: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        # Health Check APIs
+        @self.app.get("/health")
+        async def health_check():
+            """Health check endpoint (no authentication required)"""
+            try:
+                if not self.health_checker:
+                    return {"status": "healthy", "timestamp": time.time()}
+
+                status = await self.health_checker.check_all()
+                return status.to_dict()
+            except Exception as e:
+                self.logger.error(f"Error in health check: {str(e)}")
+                return {"status": "error", "timestamp": time.time()}, 500
+
+        @self.app.get("/api/health/detailed")
+        async def get_detailed_health(_: bool = Depends(verify_secret_query)):
+            """Get detailed health report with historical data"""
+            try:
+                if not self.health_checker:
+                    return {"error": "HealthChecker not available"}
+
+                status = await self.health_checker.check_all()
+                trend = self.health_checker.get_health_trend(minutes=5)
+
+                return {
+                    "status": "success",
+                    "current": status.to_dict(),
+                    "trend": trend,
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error getting detailed health: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        # Logging APIs
+        @self.app.get("/api/logs/summary")
+        async def get_log_summary(_: bool = Depends(verify_secret_query)):
+            """Get log summary and statistics"""
+            try:
+                if not self.log_aggregator:
+                    return {"error": "LogAggregator not available"}
+
+                summary = self.log_aggregator.get_summary()
+                health_stats = self.log_aggregator.get_health_stats()
+
+                return {
+                    "status": "success",
+                    "total_entries": summary.total_entries,
+                    "by_level": summary.by_level,
+                    "by_component": summary.by_component,
+                    "health_stats": health_stats,
+                    "recent_errors": [e.to_dict() for e in summary.recent_errors],
+                    "recent_warnings": [w.to_dict() for w in summary.recent_warnings],
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error getting log summary: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/logs/recent")
+        async def get_recent_logs(limit: int = Query(100, ge=1, le=1000),
+                                   _: bool = Depends(verify_secret_query)):
+            """Get recent log entries"""
+            try:
+                if not self.log_aggregator:
+                    return {"logs": [], "count": 0}
+
+                logs = self.log_aggregator.get_recent(limit=limit)
+                return {
+                    "logs": [log.to_dict() for log in logs],
+                    "count": len(logs),
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error getting recent logs: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/logs/errors")
+        async def get_error_logs(limit: int = Query(50, ge=1, le=500),
+                                  _: bool = Depends(verify_secret_query)):
+            """Get recent error entries"""
+            try:
+                if not self.log_aggregator:
+                    return {"logs": [], "count": 0}
+
+                logs = self.log_aggregator.get_errors(limit=limit)
+                return {
+                    "logs": [log.to_dict() for log in logs],
+                    "count": len(logs),
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error getting error logs: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/logs/warnings")
+        async def get_warning_logs(limit: int = Query(50, ge=1, le=500),
+                                    _: bool = Depends(verify_secret_query)):
+            """Get recent warning entries"""
+            try:
+                if not self.log_aggregator:
+                    return {"logs": [], "count": 0}
+
+                logs = self.log_aggregator.get_warnings(limit=limit)
+                return {
+                    "logs": [log.to_dict() for log in logs],
+                    "count": len(logs),
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error getting warning logs: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/logs/component/{component}")
+        async def get_component_logs(component: str, limit: int = Query(100, ge=1, le=1000),
+                                      _: bool = Depends(verify_secret_query)):
+            """Get logs from specific component"""
+            try:
+                if not self.log_aggregator:
+                    return {"logs": [], "count": 0}
+
+                logs = self.log_aggregator.get_by_component(component, limit=limit)
+                return {
+                    "component": component,
+                    "logs": [log.to_dict() for log in logs],
+                    "count": len(logs),
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error getting component logs: {str(e)}")
                 raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
     def run(self):
