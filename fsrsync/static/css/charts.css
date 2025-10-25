@@ -1,0 +1,129 @@
+/* Charts Styling */
+
+.chart-container {
+    position: relative;
+    height: 350px;
+    margin-bottom: 20px;
+}
+
+.chart-container canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* Chart.js custom styling */
+.chart-legend {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+    font-size: 0.875rem;
+}
+
+.chart-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.chart-legend-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+}
+
+/* Loading state */
+.chart-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.chart-loading::after {
+    content: '';
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    margin-left: 0.5rem;
+    border: 2px solid var(--border-color);
+    border-top-color: var(--primary-color);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Empty state */
+.chart-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    text-align: center;
+    padding: 2rem;
+}
+
+/* Tooltip styling */
+.chartjs-tooltip {
+    opacity: 1;
+    position: absolute;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    border-radius: 0.375rem;
+    pointer-events: none;
+    transform: translate(-50%, 0);
+    transition: all 0.1s ease;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    z-index: 100;
+}
+
+.chartjs-tooltip::after {
+    content: '';
+    position: absolute;
+    bottom: -5px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 5px solid rgba(0, 0, 0, 0.8);
+}
+
+/* Gradient definitions for charts */
+.transfer-rate-gradient {
+    background: linear-gradient(to top, rgba(37, 99, 235, 0.1), rgba(37, 99, 235, 0.8));
+}
+
+.bandwidth-gradient {
+    background: linear-gradient(to top, rgba(59, 130, 246, 0.1), rgba(59, 130, 246, 0.8));
+}
+
+.success-gradient {
+    background: linear-gradient(to top, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.8));
+}
+
+.error-gradient {
+    background: linear-gradient(to top, rgba(239, 68, 68, 0.1), rgba(239, 68, 68, 0.8));
+}
+
+/* Chart colors */
+:root {
+    --chart-primary: #2563eb;
+    --chart-secondary: #3b82f6;
+    --chart-tertiary: #60a5fa;
+    --chart-success: #10b981;
+    --chart-danger: #ef4444;
+    --chart-warning: #f59e0b;
+    --chart-info: #0ea5e9;
+}

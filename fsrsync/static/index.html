@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FSRsync - Distributed File Synchronization Dashboard</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/charts.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <h1>FSRsync</h1>
+                    <p class="subtitle">Distributed File Synchronization</p>
+                </div>
+                <div class="header-stats">
+                    <div class="stat">
+                        <span class="label">Connected Clients:</span>
+                        <span class="value" id="client-count">0</span>
+                    </div>
+                    <div class="stat">
+                        <span class="label">Uptime:</span>
+                        <span class="value" id="uptime">00:00:00</span>
+                    </div>
+                    <div class="stat">
+                        <span class="label">Status:</span>
+                        <span class="value status-indicator" id="status">●</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Sidebar Navigation -->
+            <aside class="sidebar">
+                <nav class="nav-menu">
+                    <ul>
+                        <li><a href="#dashboard" class="nav-link active" data-tab="dashboard">Dashboard</a></li>
+                        <li><a href="#transfers" class="nav-link" data-tab="transfers">Transfers</a></li>
+                        <li><a href="#peers" class="nav-link" data-tab="peers">Peers</a></li>
+                        <li><a href="#bandwidth" class="nav-link" data-tab="bandwidth">Bandwidth</a></li>
+                        <li><a href="#conflicts" class="nav-link" data-tab="conflicts">Conflicts</a></li>
+                        <li><a href="#metrics" class="nav-link" data-tab="metrics">Metrics</a></li>
+                        <li><a href="#settings" class="nav-link" data-tab="settings">Settings</a></li>
+                    </ul>
+                </nav>
+            </aside>
+
+            <!-- Content Area -->
+            <section class="content">
+                <!-- Dashboard Tab -->
+                <div id="dashboard" class="tab-content active">
+                    <h2>Dashboard Overview</h2>
+
+                    <!-- Quick Stats -->
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon transfer">📤</div>
+                            <div class="stat-info">
+                                <h3>Active Transfers</h3>
+                                <div class="stat-value" id="active-transfers">0</div>
+                                <p class="stat-subtitle" id="transfer-rate">0 B/s</p>
+                            </div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-icon">📊</div>
+                            <div class="stat-info">
+                                <h3>Bandwidth Usage</h3>
+                                <div class="stat-value" id="bandwidth-usage">0 Mbps</div>
+                                <p class="stat-subtitle" id="bandwidth-limit">/ ∞</p>
+                            </div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-icon">⚠️</div>
+                            <div class="stat-info">
+                                <h3>Active Conflicts</h3>
+                                <div class="stat-value" id="active-conflicts">0</div>
+                                <p class="stat-subtitle" id="conflict-status">None detected</p>
+                            </div>
+                        </div>
+
+                        <div class="stat-card">
+                            <div class="stat-icon">📁</div>
+                            <div class="stat-info">
+                                <h3>Peers Online</h3>
+                                <div class="stat-value" id="peers-online">0</div>
+                                <p class="stat-subtitle" id="total-peers">/ 0</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Charts Section -->
+                    <div class="charts-section">
+                        <div class="chart-container">
+                            <h3>Transfer Rate (Last Hour)</h3>
+                            <canvas id="transferRateChart"></canvas>
+                        </div>
+                        <div class="chart-container">
+                            <h3>Bandwidth Usage (Last Hour)</h3>
+                            <canvas id="bandwidthChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="charts-section">
+                        <div class="chart-container">
+                            <h3>Peer Status Distribution</h3>
+                            <canvas id="peerStatusChart"></canvas>
+                        </div>
+                        <div class="chart-container">
+                            <h3>Conflict Resolution Methods</h3>
+                            <canvas id="conflictChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Transfers Tab -->
+                <div id="transfers" class="tab-content">
+                    <h2>Active Transfers</h2>
+                    <div class="toolbar">
+                        <button id="pause-all-btn" class="btn btn-secondary">⏸ Pause All</button>
+                        <button id="resume-all-btn" class="btn btn-secondary">▶ Resume All</button>
+                        <button id="cancel-failed-btn" class="btn btn-danger">✕ Clear Failed</button>
+                    </div>
+
+                    <div class="transfers-container" id="transfers-list">
+                        <!-- Transfer items populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Peers Tab -->
+                <div id="peers" class="tab-content">
+                    <h2>Connected Peers</h2>
+                    <div class="toolbar">
+                        <input type="text" id="peer-filter" placeholder="Filter peers..." class="search-input">
+                        <button id="refresh-peers-btn" class="btn btn-secondary">🔄 Refresh</button>
+                    </div>
+
+                    <div class="peers-grid" id="peers-list">
+                        <!-- Peer cards populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Bandwidth Tab -->
+                <div id="bandwidth" class="tab-content">
+                    <h2>Bandwidth Management</h2>
+
+                    <div class="bandwidth-config">
+                        <h3>Global Bandwidth Limit</h3>
+                        <div class="control-group">
+                            <label for="global-limit">Limit (Mbps):</label>
+                            <input type="number" id="global-limit" placeholder="∞ (Unlimited)" min="1">
+                            <button id="set-global-limit-btn" class="btn btn-primary">Apply</button>
+                        </div>
+                    </div>
+
+                    <h3>Per-Peer Bandwidth</h3>
+                    <div class="peer-bandwidth-list" id="peer-bandwidth-list">
+                        <!-- Peer bandwidth items populated by JavaScript -->
+                    </div>
+
+                    <div class="charts-section">
+                        <div class="chart-container">
+                            <h3>Per-Peer Bandwidth Usage</h3>
+                            <canvas id="perPeerBandwidthChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Conflicts Tab -->
+                <div id="conflicts" class="tab-content">
+                    <h2>Conflict Management</h2>
+
+                    <div class="toolbar">
+                        <select id="resolution-strategy" class="select-input">
+                            <option value="LAST_WRITE_WINS">Last Write Wins</option>
+                            <option value="HOST_PRIORITY">Host Priority</option>
+                            <option value="SIZE_WINS">Size Wins</option>
+                            <option value="HASH_BASED">Hash Based</option>
+                            <option value="MANUAL">Manual Review</option>
+                        </select>
+                        <button id="apply-strategy-btn" class="btn btn-primary">Apply Strategy</button>
+                        <button id="resolve-all-btn" class="btn btn-success">✓ Resolve All</button>
+                    </div>
+
+                    <div class="conflicts-list" id="conflicts-list">
+                        <!-- Conflict items populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Metrics Tab -->
+                <div id="metrics" class="tab-content">
+                    <h2>Performance Metrics</h2>
+
+                    <div class="metrics-grid">
+                        <div class="metric-card">
+                            <h4>Transfer Statistics</h4>
+                            <ul id="transfer-stats">
+                                <li>Total Transfers: <strong>0</strong></li>
+                                <li>Total Bytes: <strong>0 B</strong></li>
+                                <li>Compression Savings: <strong>0 B</strong></li>
+                                <li>Success Rate: <strong>100%</strong></li>
+                            </ul>
+                        </div>
+
+                        <div class="metric-card">
+                            <h4>Reliability Metrics</h4>
+                            <ul id="reliability-stats">
+                                <li>Conflicts Detected: <strong>0</strong></li>
+                                <li>Conflicts Resolved: <strong>0</strong></li>
+                                <li>Manual Conflicts: <strong>0</strong></li>
+                                <li>Retry Rate: <strong>0%</strong></li>
+                            </ul>
+                        </div>
+
+                        <div class="metric-card">
+                            <h4>Performance Metrics</h4>
+                            <ul id="performance-stats">
+                                <li>Avg Transfer Rate: <strong>0 B/s</strong></li>
+                                <li>Peak Bandwidth: <strong>0 Mbps</strong></li>
+                                <li>Avg Latency: <strong>0 ms</strong></li>
+                                <li>Queue Processing: <strong>0 ms</strong></li>
+                            </ul>
+                        </div>
+
+                        <div class="metric-card">
+                            <h4>Network Health</h4>
+                            <ul id="network-stats">
+                                <li>Network Condition: <strong id="network-condition">Unknown</strong></li>
+                                <li>Timeouts: <strong>0</strong></li>
+                                <li>Packet Loss: <strong>0%</strong></li>
+                                <li>Avg RTT: <strong>0 ms</strong></li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="charts-section">
+                        <div class="chart-container">
+                            <h3>Success Rate Over Time</h3>
+                            <canvas id="successRateChart"></canvas>
+                        </div>
+                        <div class="chart-container">
+                            <h3>Conflict Types</h3>
+                            <canvas id="conflictTypesChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settings Tab -->
+                <div id="settings" class="tab-content">
+                    <h2>Settings & Configuration</h2>
+
+                    <div class="settings-section">
+                        <h3>WebSocket Connection</h3>
+                        <div class="setting-item">
+                            <label>Server URL:</label>
+                            <input type="text" id="ws-url" class="input-field">
+                            <button id="reconnect-btn" class="btn btn-secondary">Reconnect</button>
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <h3>Display Settings</h3>
+                        <div class="setting-item">
+                            <label>
+                                <input type="checkbox" id="auto-refresh" checked>
+                                Auto-refresh stats (2 seconds)
+                            </label>
+                        </div>
+                        <div class="setting-item">
+                            <label>
+                                <input type="checkbox" id="dark-mode">
+                                Dark mode
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <h3>Notifications</h3>
+                        <div class="setting-item">
+                            <label>
+                                <input type="checkbox" id="notify-conflicts" checked>
+                                Notify on conflicts
+                            </label>
+                        </div>
+                        <div class="setting-item">
+                            <label>
+                                <input type="checkbox" id="notify-failures" checked>
+                                Notify on transfer failures
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <h3>Debug</h3>
+                        <button id="export-logs-btn" class="btn btn-secondary">📥 Export Logs</button>
+                        <button id="clear-data-btn" class="btn btn-danger">🗑 Clear Cache</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal for Transfer Details -->
+    <div id="transfer-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Transfer Details</h2>
+            <div id="transfer-details-content">
+                <!-- Transfer details populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Conflict Resolution -->
+    <div id="conflict-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Resolve Conflict</h2>
+            <div id="conflict-details-content">
+                <!-- Conflict details and resolution options populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Container -->
+    <div id="notifications" class="notification-container"></div>
+
+    <!-- Scripts -->
+    <script src="js/dashboard.js"></script>
+    <script src="js/charts.js"></script>
+    <script src="js/websocket.js"></script>
+</body>
+</html>
