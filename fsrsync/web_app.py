@@ -464,6 +464,158 @@ class WebControl:
                 self.logger.error(f"Error cancelling transfer: {str(e)}")
                 raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
+        # Advanced Coordinator APIs
+        @self.app.get("/api/coordinator/status")
+        async def get_coordinator_status(_: bool = Depends(verify_secret_query)):
+            """Get SyncCoordinator status and statistics"""
+            try:
+                if not self.sync_coordinator:
+                    return {"error": "SyncCoordinator not available", "status": "unavailable"}
+
+                stats = self.sync_coordinator.get_statistics()
+                return {
+                    "status": "success",
+                    "coordinator": {
+                        "state": stats.state,
+                        "uptime_seconds": stats.uptime_seconds,
+                        "running": self.sync_coordinator.is_running()
+                    },
+                    "transfers": {
+                        "active": stats.active_transfers,
+                        "queued": stats.queued_transfers,
+                        "total_transferred_bytes": stats.total_transferred_bytes
+                    },
+                    "network": {
+                        "bandwidth_usage_mbps": stats.bandwidth_usage_mbps,
+                        "connected_peers": stats.connected_peers
+                    },
+                    "reliability": {
+                        "success_rate_percent": stats.success_rate_percent,
+                        "error_count": stats.error_count,
+                        "pending_conflicts": stats.pending_conflicts
+                    },
+                    "peers": stats.peer_stats,
+                    "timestamp": stats.timestamp
+                }
+            except Exception as e:
+                self.logger.error(f"Error getting coordinator status: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.post("/api/coordinator/pause")
+        async def pause_coordinator(_: bool = Depends(verify_secret_header)):
+            """Pause all sync operations"""
+            try:
+                if not self.sync_coordinator:
+                    raise HTTPException(status_code=400, detail="SyncCoordinator not available")
+
+                self.sync_coordinator.pause()
+                self.logger.info("SyncCoordinator paused via API")
+                return {"status": "success", "message": "All sync operations paused"}
+            except Exception as e:
+                self.logger.error(f"Error pausing coordinator: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.post("/api/coordinator/resume")
+        async def resume_coordinator(_: bool = Depends(verify_secret_header)):
+            """Resume all sync operations"""
+            try:
+                if not self.sync_coordinator:
+                    raise HTTPException(status_code=400, detail="SyncCoordinator not available")
+
+                self.sync_coordinator.resume()
+                self.logger.info("SyncCoordinator resumed via API")
+                return {"status": "success", "message": "All sync operations resumed"}
+            except Exception as e:
+                self.logger.error(f"Error resuming coordinator: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/coordinator/peers")
+        async def get_peer_list(_: bool = Depends(verify_secret_query)):
+            """Get list of connected peers"""
+            try:
+                if not self.sync_coordinator:
+                    return {"peers": [], "count": 0}
+
+                peers = []
+                for peer in self.sync_coordinator.peer_manager.peers.values():
+                    peers.append({
+                        "hostname": peer.hostname,
+                        "address": peer.address,
+                        "port": peer.port,
+                        "status": peer.status,
+                        "latency_ms": peer.latency_ms,
+                        "bandwidth_limit_mbps": peer.bandwidth_limit_mbps
+                    })
+                return {"peers": peers, "count": len(peers)}
+            except Exception as e:
+                self.logger.error(f"Error getting peer list: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/coordinator/bandwidth")
+        async def get_bandwidth_status(_: bool = Depends(verify_secret_query)):
+            """Get bandwidth management status"""
+            try:
+                if not self.sync_coordinator:
+                    return {"error": "SyncCoordinator not available"}
+
+                bw_mgr = self.sync_coordinator.bandwidth_manager
+                return {
+                    "status": "success",
+                    "global_limit_mbps": bw_mgr.global_bandwidth_limit_mbps,
+                    "current_usage_mbps": bw_mgr.get_current_bandwidth_usage(),
+                    "strategy": bw_mgr.strategy.value if hasattr(bw_mgr.strategy, 'value') else str(bw_mgr.strategy),
+                    "per_peer_limits": {
+                        peer: bw_mgr.get_peer_limit(peer)
+                        for peer in bw_mgr.peer_bandwidth.keys()
+                    }
+                }
+            except Exception as e:
+                self.logger.error(f"Error getting bandwidth status: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.post("/api/coordinator/set-bandwidth-limit")
+        async def set_bandwidth_limit(
+            request: FilePathRequest,
+            _: bool = Depends(verify_secret_header)
+        ):
+            """Set global bandwidth limit (path field contains limit in Mbps)"""
+            try:
+                if not self.sync_coordinator:
+                    raise HTTPException(status_code=400, detail="SyncCoordinator not available")
+
+                limit_mbps = float(request.path)
+                self.sync_coordinator.bandwidth_manager.set_global_limit(limit_mbps)
+                self.logger.info(f"Bandwidth limit set to {limit_mbps} Mbps via API")
+                return {"status": "success", "message": f"Bandwidth limit set to {limit_mbps} Mbps"}
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid bandwidth limit value")
+            except Exception as e:
+                self.logger.error(f"Error setting bandwidth limit: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/coordinator/metrics")
+        async def get_metrics(_: bool = Depends(verify_secret_query)):
+            """Get performance metrics from collector"""
+            try:
+                if not self.sync_coordinator:
+                    return {"error": "SyncCoordinator not available"}
+
+                metrics = self.sync_coordinator.metrics_collector
+                return {
+                    "status": "success",
+                    "metrics": {
+                        "transfer_metrics": len(metrics.transfer_metrics),
+                        "bandwidth_metrics": len(metrics.bandwidth_metrics),
+                        "performance_metrics": len(metrics.performance_metrics),
+                        "reliability_metrics": len(metrics.reliability_metrics),
+                        "peer_metrics": len(metrics.peer_metrics)
+                    },
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error getting metrics: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
     def run(self):
         """Run the web application with improved error handling"""
         try:
