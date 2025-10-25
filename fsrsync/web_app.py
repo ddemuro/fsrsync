@@ -127,6 +127,25 @@ try:
 except ImportError:
     HAS_IO_ANALYZER = False
 
+# Optional optimization and testing modules
+try:
+    from .utils.optimization_advisor import OptimizationAdvisor
+    HAS_OPTIMIZATION_ADVISOR = True
+except ImportError:
+    HAS_OPTIMIZATION_ADVISOR = False
+
+try:
+    from .utils.resource_limiter import ResourceLimiter
+    HAS_RESOURCE_LIMITER = True
+except ImportError:
+    HAS_RESOURCE_LIMITER = False
+
+try:
+    from .utils.test_runner import TestRunner
+    HAS_TEST_RUNNER = True
+except ImportError:
+    HAS_TEST_RUNNER = False
+
 # Define request models for better validation
 class ServerLockRequest(BaseModel):
     server: str
@@ -444,6 +463,45 @@ class WebControl:
                         self.logger.warning(f"Failed to initialize IOAnalyzer: {e}")
                 else:
                     self.logger.debug("IOAnalyzer not available")
+
+                # Initialize OptimizationAdvisor if available
+                self.optimization_advisor = None
+                if HAS_OPTIMIZATION_ADVISOR:
+                    try:
+                        self.optimization_advisor = OptimizationAdvisor(
+                            logger_instance=self.logger
+                        )
+                        self.logger.info("OptimizationAdvisor initialized successfully")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to initialize OptimizationAdvisor: {e}")
+                else:
+                    self.logger.debug("OptimizationAdvisor not available")
+
+                # Initialize ResourceLimiter if available
+                self.resource_limiter = None
+                if HAS_RESOURCE_LIMITER:
+                    try:
+                        self.resource_limiter = ResourceLimiter(
+                            logger_instance=self.logger
+                        )
+                        self.logger.info("ResourceLimiter initialized successfully")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to initialize ResourceLimiter: {e}")
+                else:
+                    self.logger.debug("ResourceLimiter not available")
+
+                # Initialize TestRunner if available
+                self.test_runner = None
+                if HAS_TEST_RUNNER:
+                    try:
+                        self.test_runner = TestRunner(
+                            logger_instance=self.logger
+                        )
+                        self.logger.info("TestRunner initialized successfully")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to initialize TestRunner: {e}")
+                else:
+                    self.logger.debug("TestRunner not available")
 
                 self.setup_routes()
                 self.initialized = True
@@ -1763,6 +1821,292 @@ class WebControl:
                 }
             except Exception as e:
                 self.logger.error(f"Error getting I/O summary: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        # Optimization Advisor Endpoints
+        @self.app.post("/api/optimization/analyze")
+        async def analyze_function(function_name: str = Query(...),
+                                  call_count: int = Query(...),
+                                  total_time: float = Query(...),
+                                  memory_usage: int = Query(0),
+                                  io_ops: int = Query(0),
+                                  _: bool = Depends(verify_secret_query)):
+            """Analyze function for optimization opportunities"""
+            try:
+                if not self.optimization_advisor:
+                    return {"error": "Optimization advisor not available"}
+
+                profile_id = self.optimization_advisor.analyze_function(
+                    function_name, call_count, total_time, memory_usage, io_ops
+                )
+
+                return {
+                    "status": "success",
+                    "profile_id": profile_id,
+                    "function": function_name,
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error analyzing function: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/optimization/recommendations")
+        async def get_recommendations(category: str = Query(None),
+                                     priority: str = Query(None),
+                                     _: bool = Depends(verify_secret_query)):
+            """Get optimization recommendations"""
+            try:
+                if not self.optimization_advisor:
+                    return {"error": "Optimization advisor not available"}
+
+                recommendations = self.optimization_advisor.get_recommendations(category, priority)
+
+                return {
+                    "status": "success",
+                    "recommendations": recommendations,
+                    "count": len(recommendations),
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error getting recommendations: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/optimization/report")
+        async def get_optimization_report(_: bool = Depends(verify_secret_query)):
+            """Get optimization report"""
+            try:
+                if not self.optimization_advisor:
+                    return {"error": "Optimization advisor not available"}
+
+                report = self.optimization_advisor.get_optimization_report()
+
+                return {
+                    "status": "success",
+                    "report": report,
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error getting optimization report: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        # Resource Limiter Endpoints
+        @self.app.post("/api/resources/limit")
+        async def set_resource_limit(resource_type: str = Query(...),
+                                    limit_value: float = Query(...),
+                                    unit: str = Query(...),
+                                    enforcement: str = Query("warn"),
+                                    soft_limit_percent: float = Query(80.0),
+                                    _: bool = Depends(verify_secret_query)):
+            """Set resource limit"""
+            try:
+                if not self.resource_limiter:
+                    return {"error": "Resource limiter not available"}
+
+                from .utils.resource_limiter import ResourceType, LimitEnforcement
+
+                try:
+                    rt = ResourceType[resource_type.upper()]
+                    le = LimitEnforcement[enforcement.upper()]
+                except (KeyError, ValueError):
+                    return {"error": "Invalid resource type or enforcement"}
+
+                self.resource_limiter.set_limit(rt, limit_value, unit, le, soft_limit_percent)
+
+                return {
+                    "status": "success",
+                    "resource": resource_type,
+                    "limit": limit_value,
+                    "unit": unit,
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error setting resource limit: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.post("/api/resources/record")
+        async def record_resource_usage(resource_type: str = Query(...),
+                                       current_value: float = Query(...),
+                                       _: bool = Depends(verify_secret_query)):
+            """Record resource usage"""
+            try:
+                if not self.resource_limiter:
+                    return {"error": "Resource limiter not available"}
+
+                from .utils.resource_limiter import ResourceType
+
+                try:
+                    rt = ResourceType[resource_type.upper()]
+                except (KeyError, ValueError):
+                    return {"error": "Invalid resource type"}
+
+                self.resource_limiter.record_usage(rt, current_value)
+
+                return {
+                    "status": "success",
+                    "resource": resource_type,
+                    "value": current_value,
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error recording resource usage: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/resources/usage")
+        async def get_resource_usage(resource_type: str = Query(None),
+                                    _: bool = Depends(verify_secret_query)):
+            """Get resource usage"""
+            try:
+                if not self.resource_limiter:
+                    return {"error": "Resource limiter not available"}
+
+                if resource_type:
+                    from .utils.resource_limiter import ResourceType
+                    try:
+                        rt = ResourceType[resource_type.upper()]
+                        usage = self.resource_limiter.get_current_usage(rt)
+                    except (KeyError, ValueError):
+                        return {"error": "Invalid resource type"}
+                else:
+                    usage = self.resource_limiter.get_current_usage()
+
+                return {
+                    "status": "success",
+                    "usage": usage,
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error getting resource usage: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/resources/violations")
+        async def get_resource_violations(resource_type: str = Query(None),
+                                         _: bool = Depends(verify_secret_query)):
+            """Get resource violations"""
+            try:
+                if not self.resource_limiter:
+                    return {"error": "Resource limiter not available"}
+
+                if resource_type:
+                    from .utils.resource_limiter import ResourceType
+                    try:
+                        rt = ResourceType[resource_type.upper()]
+                        violations = self.resource_limiter.get_violations(rt)
+                    except (KeyError, ValueError):
+                        return {"error": "Invalid resource type"}
+                else:
+                    violations = self.resource_limiter.get_violations()
+
+                return {
+                    "status": "success",
+                    "violations": violations,
+                    "count": len(violations),
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error getting violations: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/resources/report")
+        async def get_resource_report(_: bool = Depends(verify_secret_query)):
+            """Get resource usage report"""
+            try:
+                if not self.resource_limiter:
+                    return {"error": "Resource limiter not available"}
+
+                report = self.resource_limiter.get_resource_report()
+
+                return {
+                    "status": "success",
+                    "report": report,
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error getting resource report: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        # Performance Test Runner Endpoints
+        @self.app.post("/api/tests/scenario")
+        async def register_test_scenario(scenario_name: str = Query(...),
+                                        test_type: str = Query(...),
+                                        description: str = Query(...),
+                                        iterations: int = Query(100),
+                                        concurrency: int = Query(1),
+                                        _: bool = Depends(verify_secret_query)):
+            """Register test scenario"""
+            try:
+                if not self.test_runner:
+                    return {"error": "Test runner not available"}
+
+                scenario_id = self.test_runner.register_scenario(
+                    scenario_name, test_type, description,
+                    iterations=iterations, concurrency=concurrency
+                )
+
+                return {
+                    "status": "success",
+                    "scenario_id": scenario_id,
+                    "scenario_name": scenario_name,
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error registering scenario: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.post("/api/tests/run")
+        async def run_test_scenario(scenario_id: str = Query(...),
+                                   _: bool = Depends(verify_secret_query)):
+            """Run test scenario"""
+            try:
+                if not self.test_runner:
+                    return {"error": "Test runner not available"}
+
+                test_id = self.test_runner.run_scenario(scenario_id)
+
+                return {
+                    "status": "success" if test_id else "failed",
+                    "test_id": test_id,
+                    "scenario_id": scenario_id,
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error running test: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/tests/result")
+        async def get_test_result(test_id: str = Query(...),
+                                 _: bool = Depends(verify_secret_query)):
+            """Get test result"""
+            try:
+                if not self.test_runner:
+                    return {"error": "Test runner not available"}
+
+                result = self.test_runner.get_test_result(test_id)
+
+                return {
+                    "status": "success" if result else "not_found",
+                    "result": result,
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error getting test result: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/tests/summary")
+        async def get_test_summary(_: bool = Depends(verify_secret_query)):
+            """Get test execution summary"""
+            try:
+                if not self.test_runner:
+                    return {"error": "Test runner not available"}
+
+                summary = self.test_runner.get_test_summary()
+
+                return {
+                    "status": "success",
+                    "summary": summary,
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error getting test summary: {str(e)}")
                 raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
     def run(self):
