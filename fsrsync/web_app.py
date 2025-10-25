@@ -14,6 +14,13 @@ from pydantic import BaseModel
 
 from .utils.websocket_server import WebSocketServer, WebSocketMessage, MessageType, SubscriptionType
 
+# Optional import for advanced features
+try:
+    from .utils.sync_coordinator import SyncCoordinator
+    HAS_SYNC_COORDINATOR = True
+except ImportError:
+    HAS_SYNC_COORDINATOR = False
+
 # Define request models for better validation
 class ServerLockRequest(BaseModel):
     server: str
@@ -74,6 +81,22 @@ class WebControl:
 
                 # Store connected WebSocket clients
                 self.ws_clients: Dict[str, WebSocket] = {}
+
+                # Initialize SyncCoordinator if available
+                self.sync_coordinator = None
+                if HAS_SYNC_COORDINATOR:
+                    try:
+                        self.sync_coordinator = SyncCoordinator(
+                            sync_app=sync_state,
+                            host=host,
+                            port=port,
+                            logger_instance=self.logger
+                        )
+                        self.logger.info("SyncCoordinator initialized successfully")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to initialize SyncCoordinator: {e}")
+                else:
+                    self.logger.debug("SyncCoordinator not available")
 
                 self.setup_routes()
                 self.initialized = True
