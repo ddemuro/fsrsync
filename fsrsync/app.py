@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import argparse
+from fsrsync.setup_wizard import run_setup_wizard
 
 DEFAULT_CONFIG_FILE = "/etc/fsrsync/config.json"
 
@@ -61,43 +62,8 @@ def main():
 
 
 def setup(folder="/etc/fsrsync"):
-    """Run the setup wizard"""
-    # Copy the default configuration file to the default location
-    # Create /etc/fsrsync directory if it does not exist
-    # Create /etc/fsrsync/config.json if it does not exist
-    logs = None
-    default_folder = DEFAULT_CONFIG_FILE
-    if not os.path.exists(folder):
-        os.makedirs(folder)
-        print(f"Created {folder}")
-    if folder != "/etc/fsrsync":
-        default_folder = f"{folder}/config.json"
-        logs = f"{folder}/logs/"
-        if not os.path.exists(logs):
-            os.makedirs(logs, exist_ok=True)
-            print(f"Created {logs}")
-    hostname = os.uname().nodename
-    if not os.path.exists(default_folder):
-        config_dict = {
-            "log_level": "DEBUG",
-            "hostname": hostname,
-            "control_server_port": 8080,
-            "control_server_host": "0.0.0.0",
-            "control_server_secret": "secret",
-            "max_stats": 100,
-            "max_server_lock_time": 60,
-            "use_global_server_lock": True,
-            "full_sync_interval": 60,
-            "destinations": []
-        }
-        if logs:
-            config_dict["logs"] = f"{logs}fsrsync.log"
-        CONFIG_TO_WRITE = json.dumps(config_dict, indent=4)
-        with open(default_folder, "w", encoding="utf-8") as f:
-            f.write(CONFIG_TO_WRITE)
-        print(f"Created {default_folder} with default configuration")
-    # Print a message to the user
-    print("FSRsync setup complete")
+    """Run the interactive setup wizard"""
+    run_setup_wizard(folder)
 
 
 """ Main entry point for the application """
