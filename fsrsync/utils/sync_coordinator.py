@@ -32,6 +32,16 @@ from .queue_manager import QueueManager
 from .websocket_server import WebSocketServer
 from .metrics import MetricsCollector
 
+# Import optimization modules (Phase 17)
+try:
+    from .delta_optimizer import DeltaOptimizer
+    from .concurrent_optimizer import ConcurrentOptimizer
+    from .adaptive_chunk_sizing import AdaptiveChunkSizer
+    from .transfer_connection_pooling import TransferConnectionPooling
+    HAS_OPTIMIZERS = True
+except ImportError:
+    HAS_OPTIMIZERS = False
+
 
 class CoordinatorState(Enum):
     """State of the sync coordinator"""
@@ -112,6 +122,22 @@ class SyncCoordinator:
         self.metrics_collector = MetricsCollector(
             logger_instance=self.logger
         )
+
+        # Initialize optimization modules (Phase 17)
+        self.delta_optimizer = None
+        self.concurrent_optimizer = None
+        self.adaptive_chunk_sizer = None
+        self.connection_pooling = None
+
+        if HAS_OPTIMIZERS:
+            try:
+                self.delta_optimizer = DeltaOptimizer(logger_instance=self.logger)
+                self.concurrent_optimizer = ConcurrentOptimizer(logger_instance=self.logger)
+                self.adaptive_chunk_sizer = AdaptiveChunkSizer(logger_instance=self.logger)
+                self.connection_pooling = TransferConnectionPooling(logger_instance=self.logger)
+                self.logger.info("Phase 17 optimizers initialized successfully")
+            except Exception as e:
+                self.logger.warning(f"Failed to initialize optimizers: {e}")
 
         # Statistics tracking
         self.error_count = 0
@@ -200,3 +226,211 @@ class SyncCoordinator:
     def is_running(self) -> bool:
         """Check if coordinator is running"""
         return self.state == CoordinatorState.RUNNING
+
+    # ==================== Phase 17 Optimization Methods ====================
+
+    def get_delta_optimization(self, file_path: str, file_size: int,
+                              recent_changes: Optional[List[tuple]] = None) -> Optional[Dict[str, Any]]:
+        """
+        Get delta optimization recommendations for a file.
+
+        Args:
+            file_path: Path to file
+            file_size: File size in bytes
+            recent_changes: List of (offset, length) tuples
+
+        Returns:
+            Delta analysis with optimization recommendations
+        """
+        if not self.delta_optimizer:
+            return None
+
+        try:
+            analysis = self.delta_optimizer.analyze_file(
+                file_path=file_path,
+                file_size=file_size,
+                recent_changes=recent_changes
+            )
+            return {
+                'file': file_path,
+                'strategy': analysis.recommended_strategy.value,
+                'chunk_size': analysis.recommended_chunk_size,
+                'compression_benefit': analysis.compression_benefit,
+                'bandwidth_reduction': analysis.estimated_bandwidth_reduction,
+                'confidence': analysis.confidence
+            }
+        except Exception as e:
+            self.logger.error(f"Error getting delta optimization: {e}")
+            return None
+
+    def get_concurrent_transfer_strategy(self, file_count: int, total_size: int,
+                                        available_bandwidth: float) -> Optional[Dict[str, Any]]:
+        """
+        Get optimal transfer strategy for multiple files.
+
+        Args:
+            file_count: Number of files
+            total_size: Total size in bytes
+            available_bandwidth: Available bandwidth in MB/s
+
+        Returns:
+            Strategy recommendation
+        """
+        if not self.concurrent_optimizer:
+            return None
+
+        try:
+            strategy = self.concurrent_optimizer.select_strategy(
+                file_count=file_count,
+                total_size=total_size,
+                available_bandwidth=available_bandwidth
+            )
+            parallelism = self.concurrent_optimizer.optimize_parallelism(
+                file_count=file_count,
+                total_size=total_size
+            )
+            return {
+                'strategy': strategy.value,
+                'parallelism_level': parallelism,
+                'file_count': file_count,
+                'total_size_mb': total_size / (1024 * 1024),
+                'available_bandwidth_mbps': available_bandwidth
+            }
+        except Exception as e:
+            self.logger.error(f"Error getting transfer strategy: {e}")
+            return None
+
+    def get_chunk_size_recommendation(self, file_type: str, file_size: int,
+                                     bandwidth_mbps: float, latency_ms: float) -> Optional[Dict[str, Any]]:
+        """
+        Get adaptive chunk size recommendation.
+
+        Args:
+            file_type: Type of file
+            file_size: File size in bytes
+            bandwidth_mbps: Network bandwidth in MB/s
+            latency_ms: Network latency in ms
+
+        Returns:
+            Chunk size recommendation
+        """
+        if not self.adaptive_chunk_sizer:
+            return None
+
+        try:
+            from .adaptive_chunk_sizing import SizingMetrics, NetworkConditions, SystemResources
+            import os
+            import psutil
+
+            # Build metrics
+            metrics = SizingMetrics(
+                file_size=file_size,
+                file_type=file_type,
+                network_bandwidth=bandwidth_mbps,
+                network_latency=latency_ms,
+                memory_available=psutil.virtual_memory().available / (1024 * 1024),
+                cpu_available=100 - psutil.cpu_percent(interval=0.1)
+            )
+
+            # Build network conditions
+            network = NetworkConditions(
+                bandwidth_mbps=bandwidth_mbps,
+                latency_ms=latency_ms
+            )
+
+            # Build system resources
+            resources = SystemResources(
+                available_memory_mb=psutil.virtual_memory().available / (1024 * 1024),
+                available_cpu_percent=100 - psutil.cpu_percent(interval=0.1)
+            )
+
+            recommendation = self.adaptive_chunk_sizer.recommend_chunk_size(
+                metrics=metrics,
+                network=network,
+                resources=resources
+            )
+
+            return {
+                'recommended_chunk_size': recommendation.recommended_size,
+                'min_size': recommendation.min_size,
+                'max_size': recommendation.max_size,
+                'strategy': recommendation.strategy.value,
+                'confidence': recommendation.confidence,
+                'estimated_throughput_mbps': recommendation.estimated_throughput_mbps,
+                'reasoning': recommendation.reasoning
+            }
+        except Exception as e:
+            self.logger.error(f"Error getting chunk size recommendation: {e}")
+            return None
+
+    def get_connection_for_transfer(self, destination: str) -> Optional[str]:
+        """
+        Get a connection from the pool for transfer.
+
+        Args:
+            destination: Destination identifier
+
+        Returns:
+            Connection ID
+        """
+        if not self.connection_pooling:
+            return None
+
+        try:
+            return self.connection_pooling.get_connection(destination)
+        except Exception as e:
+            self.logger.error(f"Error getting connection: {e}")
+            return None
+
+    def record_transfer_completion(self, destination: str, connection_id: str,
+                                  success: bool, bytes_transferred: int = 0,
+                                  duration_seconds: float = 0.0) -> None:
+        """
+        Record transfer completion and return connection to pool.
+
+        Args:
+            destination: Destination identifier
+            connection_id: Connection ID
+            success: Whether transfer was successful
+            bytes_transferred: Bytes transferred
+            duration_seconds: Duration of transfer
+        """
+        if not self.connection_pooling:
+            return
+
+        try:
+            self.connection_pooling.return_connection(
+                destination=destination,
+                connection_id=connection_id,
+                success=success,
+                bytes_transferred=bytes_transferred,
+                duration_seconds=duration_seconds
+            )
+        except Exception as e:
+            self.logger.error(f"Error recording transfer: {e}")
+
+    def get_optimization_summary(self) -> Dict[str, Any]:
+        """Get optimization summary from all Phase 17 modules"""
+        summary = {
+            'timestamp': time.time(),
+            'optimizers_enabled': HAS_OPTIMIZERS,
+            'optimizers': {}
+        }
+
+        try:
+            if self.delta_optimizer:
+                summary['optimizers']['delta'] = self.delta_optimizer.get_optimization_summary()
+
+            if self.concurrent_optimizer:
+                summary['optimizers']['concurrent'] = self.concurrent_optimizer.get_optimization_summary()
+
+            if self.adaptive_chunk_sizer:
+                summary['optimizers']['chunk_sizing'] = self.adaptive_chunk_sizer.get_optimization_summary()
+
+            if self.connection_pooling:
+                summary['optimizers']['connection_pooling'] = self.connection_pooling.get_optimization_summary()
+
+        except Exception as e:
+            self.logger.error(f"Error getting optimization summary: {e}")
+
+        return summary
