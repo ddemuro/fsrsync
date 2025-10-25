@@ -146,6 +146,13 @@ try:
 except ImportError:
     HAS_TEST_RUNNER = False
 
+# Optional sync instrumentation module
+try:
+    from .utils.sync_instrumentation import SyncInstrumentation
+    HAS_SYNC_INSTRUMENTATION = True
+except ImportError:
+    HAS_SYNC_INSTRUMENTATION = False
+
 # Define request models for better validation
 class ServerLockRequest(BaseModel):
     server: str
@@ -502,6 +509,22 @@ class WebControl:
                         self.logger.warning(f"Failed to initialize TestRunner: {e}")
                 else:
                     self.logger.debug("TestRunner not available")
+
+                # Initialize Sync Instrumentation if available
+                if HAS_SYNC_INSTRUMENTATION:
+                    try:
+                        SyncInstrumentation.initialize(
+                            metrics_collector=self.metrics_collector,
+                            benchmarker=self.performance_benchmarker,
+                            io_analyzer=self.io_analyzer,
+                            profiler=self.performance_analyzer.function_profiler if self.performance_analyzer else None,
+                            logger_instance=self.logger
+                        )
+                        self.logger.info("SyncInstrumentation initialized successfully")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to initialize SyncInstrumentation: {e}")
+                else:
+                    self.logger.debug("SyncInstrumentation not available")
 
                 self.setup_routes()
                 self.initialized = True
@@ -2107,6 +2130,25 @@ class WebControl:
                 }
             except Exception as e:
                 self.logger.error(f"Error getting test summary: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        # Sync Instrumentation Endpoint
+        @self.app.get("/api/instrumentation/summary")
+        async def get_instrumentation_summary(_: bool = Depends(verify_secret_query)):
+            """Get sync instrumentation summary"""
+            try:
+                if HAS_SYNC_INSTRUMENTATION:
+                    summary = SyncInstrumentation.get_instrumentation_summary()
+                else:
+                    summary = {"available": False}
+
+                return {
+                    "status": "success",
+                    "instrumentation": summary,
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error getting instrumentation summary: {str(e)}")
                 raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
     def run(self):
