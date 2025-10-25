@@ -4,6 +4,11 @@ from .utils import fix_path_slashes, is_file_open
 from inotify_simple import INotify, flags
 import threading
 from threading import Lock
+from enum import Enum
+from typing import Optional, Dict, Set, List
+from dataclasses import dataclass, field
+from pathlib import Path
+import xxhash
 
 # Map human-readable event names to inotify constants
 EVENT_MAP = {
@@ -21,6 +26,111 @@ EVENT_MAP = {
     "IN_CLOSE_WRITE": flags.CLOSE_WRITE,
     "IN_ISDIR": flags.ISDIR
 }
+
+
+# ============================================================================
+# File State Machine
+# ============================================================================
+
+class FileState(Enum):
+    """File state in the sync lifecycle"""
+    PENDING = "PENDING"          # File created/modified but not yet stable
+    WRITING = "WRITING"          # File is currently open/being written
+    CLOSED = "CLOSED"            # File handle closed but stability unknown
+    STABLE = "STABLE"            # File hasn't changed for stability_threshold seconds
+    SYNCED = "SYNCED"            # File successfully synced to remote
+
+
+@dataclass
+class FileHashInfo:
+    """Content hash information for a file"""
+    path: str                       # File path
+    full_hash: str                 # Full file content hash (xxHash64)
+    mtime: float                   # Modification time when hash calculated
+    size: int                      # File size when hash calculated
+    changed_at: float = field(default_factory=time.time)  # When change was detected
+
+    def is_stale(self, current_mtime: float, current_size: int) -> bool:
+        """Check if hash is stale (file has changed since hash was taken)"""
+        return current_mtime != self.mtime or current_size != self.size
+
+
+@dataclass
+class FileStateInfo:
+    """State tracking information for a file"""
+    path: str                       # File path
+    state: FileState               # Current state
+    state_changed_at: float = field(default_factory=time.time)  # When state changed
+    last_modified: float = field(default_factory=time.time)  # Last modification time
+    last_seen_size: int = 0         # Last known size
+    hash_info: Optional[FileHashInfo] = None  # Cached hash
+    event_count: int = 0            # Number of events since state change
+
+    def time_in_state(self) -> float:
+        """Time in current state in seconds"""
+        return time.time() - self.state_changed_at
+
+    def is_stable(self, stability_threshold: float = 2.0) -> bool:
+        """Check if file is stable (hasn't changed for threshold seconds)"""
+        if self.state != FileState.CLOSED:
+            return False
+        return self.time_in_state() >= stability_threshold
+
+
+class FileHashCalculator:
+    """Calculate content hashes for files"""
+    CHUNK_SIZE = 65536  # 64KB chunks
+
+    def __init__(self, logger=None):
+        """Initialize calculator"""
+        self.logger = logger or Logger()
+
+    def calculate_file_hash(self, file_path: str) -> Optional[str]:
+        """
+        Calculate xxHash64 of file content.
+
+        Args:
+            file_path: Path to file
+
+        Returns:
+            Hex string of hash or None on error
+        """
+        try:
+            path = Path(file_path)
+            if not path.exists():
+                return None
+
+            hasher = xxhash.xxh64()
+
+            with open(file_path, 'rb') as f:
+                while True:
+                    chunk = f.read(self.CHUNK_SIZE)
+                    if not chunk:
+                        break
+                    hasher.update(chunk)
+
+            return hasher.hexdigest()
+
+        except Exception as e:
+            self.logger.debug(f"Error calculating hash for {file_path}: {e}")
+            return None
+
+    def get_file_info(self, file_path: str) -> Optional[tuple]:
+        """
+        Get file size and modification time.
+
+        Returns:
+            Tuple of (size, mtime) or None on error
+        """
+        try:
+            path = Path(file_path)
+            if not path.exists():
+                return None
+            stat_info = path.stat()
+            return (stat_info.st_size, stat_info.st_mtime)
+        except Exception as e:
+            self.logger.debug(f"Error getting file info for {file_path}: {e}")
+            return None
 
 
 class File:
@@ -48,12 +158,22 @@ class File:
 
 
 class FilesystemMonitor:
-    """Class to monitor filesystem events using inotify"""
+    """Class to monitor filesystem events using inotify with state tracking and hashing"""
     warning_file_open_time = 86400
     max_tracked_files = 500000
+    default_stability_threshold = 2.0  # Seconds before file is considered stable
 
-    def __init__(self, time_between_events=5, max_tracked_files=500000):
-        """Initialize the filesystem monitor"""
+    def __init__(self, time_between_events=5, max_tracked_files=500000,
+                 stability_threshold: float = 2.0, enable_hashing: bool = True):
+        """
+        Initialize the filesystem monitor.
+
+        Args:
+            time_between_events: Time between event reads in seconds
+            max_tracked_files: Maximum files to track (FIFO eviction)
+            stability_threshold: Seconds before closed file is considered stable
+            enable_hashing: Whether to calculate file hashes for change detection
+        """
         self.inotify_watcher = INotify()
         self.watches = {}  # Keep track of paths being watched
         self.open_files = set()  # Track files that are open for writing
@@ -62,9 +182,20 @@ class FilesystemMonitor:
         self.logger = Logger()
         self.time_between_events = time_between_events  # Time between events in seconds
         self.max_tracked_files = max_tracked_files
+        self.stability_threshold = stability_threshold
+        self.enable_hashing = enable_hashing
+
+        # New state tracking
+        self.file_states: Dict[str, FileStateInfo] = {}  # path -> FileStateInfo
+        self.file_hashes: Dict[str, FileHashInfo] = {}   # path -> FileHashInfo
+        self.hash_calculator = FileHashCalculator(logger=self.logger)
+
+        # Thread safety locks
         self.open_files_lock = Lock()
         self.immediate_sync_lock = Lock()
         self.regular_sync_lock = Lock()
+        self.file_states_lock = Lock()
+        self.file_hashes_lock = Lock()
 
     def __del__(self):
         """Destructor to close inotify watcher"""
@@ -441,3 +572,247 @@ class FilesystemMonitor:
         self.clear_regular_sync_files()
         self.clear_locked_files()
         self.logger.info("All sync files cleared")
+
+    # ========================================================================
+    # File State Management
+    # ========================================================================
+
+    def set_file_state(self, file_path: str, new_state: FileState) -> None:
+        """
+        Update file state and track state change.
+
+        Args:
+            file_path: Path to file
+            new_state: New FileState value
+        """
+        file_path = fix_path_slashes(file_path)
+        with self.file_states_lock:
+            if file_path not in self.file_states:
+                self.file_states[file_path] = FileStateInfo(
+                    path=file_path,
+                    state=new_state
+                )
+            else:
+                self.file_states[file_path].state = new_state
+                self.file_states[file_path].state_changed_at = time.time()
+                self.file_states[file_path].event_count = 0
+            self.logger.debug(f"File {file_path} state changed to {new_state.value}")
+
+    def get_file_state(self, file_path: str) -> Optional[FileState]:
+        """
+        Get current file state.
+
+        Args:
+            file_path: Path to file
+
+        Returns:
+            FileState or None if not tracked
+        """
+        file_path = fix_path_slashes(file_path)
+        with self.file_states_lock:
+            state_info = self.file_states.get(file_path)
+            return state_info.state if state_info else None
+
+    def get_file_state_info(self, file_path: str) -> Optional[FileStateInfo]:
+        """
+        Get complete file state information.
+
+        Args:
+            file_path: Path to file
+
+        Returns:
+            FileStateInfo or None
+        """
+        file_path = fix_path_slashes(file_path)
+        with self.file_states_lock:
+            return self.file_states.get(file_path)
+
+    def get_stable_files(self) -> List[str]:
+        """
+        Get all files that have reached stable state.
+
+        Returns:
+            List of file paths that are stable
+        """
+        stable_files = []
+        with self.file_states_lock:
+            for path, state_info in self.file_states.items():
+                if state_info.is_stable(self.stability_threshold):
+                    stable_files.append(path)
+        return stable_files
+
+    def get_files_by_state(self, state: FileState) -> List[str]:
+        """
+        Get all files in a specific state.
+
+        Args:
+            state: FileState to filter by
+
+        Returns:
+            List of file paths in that state
+        """
+        files = []
+        with self.file_states_lock:
+            for path, state_info in self.file_states.items():
+                if state_info.state == state:
+                    files.append(path)
+        return files
+
+    def increment_event_count(self, file_path: str) -> None:
+        """
+        Increment event count for file (used to track activity).
+
+        Args:
+            file_path: Path to file
+        """
+        file_path = fix_path_slashes(file_path)
+        with self.file_states_lock:
+            if file_path in self.file_states:
+                self.file_states[file_path].event_count += 1
+
+    # ========================================================================
+    # File Hashing and Change Detection
+    # ========================================================================
+
+    def calculate_file_hash(self, file_path: str) -> Optional[str]:
+        """
+        Calculate hash for file and cache it.
+
+        Args:
+            file_path: Path to file
+
+        Returns:
+            Hash string or None on error
+        """
+        if not self.enable_hashing:
+            return None
+
+        file_path = fix_path_slashes(file_path)
+        try:
+            file_info = self.hash_calculator.get_file_info(file_path)
+            if file_info is None:
+                return None
+
+            size, mtime = file_info
+            file_hash = self.hash_calculator.calculate_file_hash(file_path)
+
+            if file_hash is None:
+                return None
+
+            # Cache the hash
+            with self.file_hashes_lock:
+                self.file_hashes[file_path] = FileHashInfo(
+                    path=file_path,
+                    full_hash=file_hash,
+                    mtime=mtime,
+                    size=size
+                )
+
+            return file_hash
+
+        except Exception as e:
+            self.logger.error(f"Error calculating hash for {file_path}: {e}")
+            return None
+
+    def has_file_changed(self, file_path: str) -> bool:
+        """
+        Check if file content has changed since last hash.
+
+        Args:
+            file_path: Path to file
+
+        Returns:
+            True if file has changed or not hashed yet
+        """
+        if not self.enable_hashing:
+            return True
+
+        file_path = fix_path_slashes(file_path)
+        with self.file_hashes_lock:
+            hash_info = self.file_hashes.get(file_path)
+            if hash_info is None:
+                return True  # Not hashed yet, consider it changed
+
+            file_info = self.hash_calculator.get_file_info(file_path)
+            if file_info is None:
+                return True  # File doesn't exist, consider it changed
+
+            size, mtime = file_info
+            return hash_info.is_stale(mtime, size)
+
+    def get_cached_hash(self, file_path: str) -> Optional[str]:
+        """
+        Get previously calculated hash without recalculating.
+
+        Args:
+            file_path: Path to file
+
+        Returns:
+            Cached hash string or None
+        """
+        file_path = fix_path_slashes(file_path)
+        with self.file_hashes_lock:
+            hash_info = self.file_hashes.get(file_path)
+            if hash_info is None:
+                return None
+
+            # Return hash only if still fresh (not stale)
+            file_info = self.hash_calculator.get_file_info(file_path)
+            if file_info is None:
+                return None
+
+            size, mtime = file_info
+            if hash_info.is_stale(mtime, size):
+                return None  # Hash is stale
+
+            return hash_info.full_hash
+
+    def get_hash_statistics(self) -> Dict[str, int]:
+        """
+        Get statistics about cached hashes.
+
+        Returns:
+            Dictionary with hash statistics
+        """
+        with self.file_hashes_lock:
+            total = len(self.file_hashes)
+            stale = sum(
+                1 for info in self.file_hashes.values()
+                if self.hash_calculator.get_file_info(info.path) is None or
+                   info.is_stale(
+                       *self.hash_calculator.get_file_info(info.path)
+                   )
+            )
+            return {
+                "total_cached": total,
+                "stale_hashes": stale,
+                "fresh_hashes": total - stale
+            }
+
+    def clear_file_hashes(self, file_path: Optional[str] = None) -> None:
+        """
+        Clear cached hashes (for specific file or all).
+
+        Args:
+            file_path: Specific file to clear, or None to clear all
+        """
+        file_path = fix_path_slashes(file_path) if file_path else None
+        with self.file_hashes_lock:
+            if file_path:
+                self.file_hashes.pop(file_path, None)
+            else:
+                self.file_hashes.clear()
+            self.logger.debug(f"Cleared hashes for {file_path or 'all files'}")
+
+    def get_state_statistics(self) -> Dict[str, int]:
+        """
+        Get statistics about file states.
+
+        Returns:
+            Dictionary with state counts
+        """
+        stats = {state.value: 0 for state in FileState}
+        with self.file_states_lock:
+            for state_info in self.file_states.values():
+                stats[state_info.state.value] += 1
+        return stats
