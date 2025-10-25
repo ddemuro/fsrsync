@@ -19,11 +19,20 @@ pipx install --index-url="https://pypy.takelan.com/root/takelan/+simple" fsrsync
 
 That should install the latest version of FSRsync on your system. If you encounter any issues, please let us know!
 
-How to run:
+**Quick Start:**
+
 ```bash
-/root/.local/bin/fsrsync --setup # To setup the configuration file in /etc/fsrsync/config.json
-/root/.local/bin/fsrsync # To run the application
+# 1. Run the interactive setup wizard
+fsrsync --setup
+
+# 2. Start FSRsync
+fsrsync
+
+# 3. Open web interface
+# http://localhost:8080
 ```
+
+The setup wizard guides you through all configuration in an easy, interactive way!
 
 **Overview**
 -----------
