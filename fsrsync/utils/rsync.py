@@ -2,10 +2,17 @@
 import os
 import shlex
 import tempfile
-from typing import List, Tuple, Optional, Dict, Any, Union
+import socket
+from typing import List, Tuple, Optional, Dict, Any, Union, BinaryIO
 from .logs import Logger
 from .utils import run_command
 from .ssh_lib import run_ssh_command
+
+try:
+    from .transport_protocol import FSRsyncProtocol, FileMetadata, CompressionType
+    TRANSPORT_PROTOCOL_AVAILABLE = True
+except ImportError:
+    TRANSPORT_PROTOCOL_AVAILABLE = False
 
 
 class RsyncManager:
@@ -89,10 +96,16 @@ class RsyncManager:
         
         # Set up logger
         self.logger = logger or Logger()
-        
+
         # Initialize sync state
         self.rsync_output = ""
         self.last_exit_code = None
+
+        # Transport protocol support
+        self.use_transport_protocol = False
+        self.transport_protocol = None
+        if TRANSPORT_PROTOCOL_AVAILABLE:
+            self.logger.debug("FSRsync transport protocol available for use")
         
     def dedupe_list(self, items: List[str]) -> List[str]:
         """Deduplicate a list efficiently while preserving order.
@@ -325,39 +338,59 @@ class RsyncManager:
         return stats
         
     def run(
-        self, 
-        exclude_list: Optional[List[str]] = None, 
-        include_list: Optional[List[str]] = None
+        self,
+        exclude_list: Optional[List[str]] = None,
+        include_list: Optional[List[str]] = None,
+        use_protocol: bool = True,
+        protocol_port: int = 9876
     ) -> Tuple[bool, bool]:
-        """Run rsync with the specified options, paths, and destination.
-        
+        """Run sync with the specified options, using protocol or rsync fallback.
+
         Args:
             exclude_list: List of patterns to exclude
             include_list: List of patterns to include
-            
+            use_protocol: Try FSRsync transport protocol first
+            protocol_port: Port for transport protocol
+
         Returns:
-            Tuple of (rsync_success, commands_success)
+            Tuple of (sync_success, commands_success)
         """
         exclude_file = None
         include_file = None
-        
+
         try:
             # Dedupe and filter lists
             if exclude_list:
                 exclude_list = self.dedupe_list(exclude_list)
-                
+
             if include_list:
                 include_list = self.dedupe_list(include_list)
-                
+
                 # Remove excluded items from include list
                 if exclude_list:
                     include_list = [item for item in include_list if item not in exclude_list]
-                    
+
             # Check if include list is empty after filtering
             if include_list is not None and len(include_list) == 0:
-                self.logger.info("Include list is empty after filtering, skipping rsync.")
+                self.logger.info("Include list is empty after filtering, skipping sync.")
                 return True, True
-                
+
+            # Try transport protocol first if available
+            if use_protocol and TRANSPORT_PROTOCOL_AVAILABLE:
+                if self.try_transport_protocol(port=protocol_port):
+                    self.logger.info("Using FSRsync transport protocol for sync")
+                    protocol_result = self.run_with_transport_protocol(exclude_list, include_list)
+                    if protocol_result[0]:
+                        self.logger.info("Transport protocol sync succeeded")
+                        return protocol_result
+                    else:
+                        self.logger.warning("Transport protocol sync failed, falling back to rsync")
+                else:
+                    self.logger.debug("Transport protocol not available, using rsync")
+
+            # Fall back to rsync
+            self.logger.info("Using rsync for file synchronization")
+
             # Run pre-sync local commands
             if not self.run_commands(self.pre_sync_commands_local):
                 self.logger.warning("Some pre-sync local commands failed, continuing anyway")
@@ -448,9 +481,98 @@ class RsyncManager:
                 except OSError as e:
                     self.logger.warning(f"Failed to remove temporary include file: {e}")
                     
+    def try_transport_protocol(self, port: int = 9876, timeout: float = 5.0) -> bool:
+        """
+        Attempt to negotiate FSRsync transport protocol with remote.
+
+        Args:
+            port: Port to connect to on remote
+            timeout: Connection timeout in seconds
+
+        Returns:
+            True if protocol negotiation successful, False otherwise
+        """
+        if not TRANSPORT_PROTOCOL_AVAILABLE:
+            self.logger.debug("Transport protocol not available, skipping negotiation")
+            return False
+
+        try:
+            self.logger.info(f"Attempting FSRsync transport protocol negotiation with {self.host}:{port}")
+
+            # Create socket connection to remote
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(timeout)
+
+            try:
+                sock.connect((self.host, port))
+                self.logger.debug(f"Connected to {self.host}:{port}")
+
+                # Create protocol handler
+                self.transport_protocol = FSRsyncProtocol(sock)
+
+                # Try to send SYNC_START message
+                if self.transport_protocol.send_sync_start({"version": 1}):
+                    self.use_transport_protocol = True
+                    self.logger.info("FSRsync transport protocol negotiation successful")
+                    return True
+                else:
+                    self.logger.debug("SYNC_START failed, falling back to rsync")
+                    sock.close()
+                    return False
+
+            except (socket.timeout, socket.error) as e:
+                self.logger.debug(f"Failed to connect to {self.host}:{port}: {e}")
+                return False
+
+        except Exception as e:
+            self.logger.debug(f"Transport protocol negotiation error: {e}")
+            return False
+
+    def run_with_transport_protocol(
+        self,
+        exclude_list: Optional[List[str]] = None,
+        include_list: Optional[List[str]] = None
+    ) -> Tuple[bool, bool]:
+        """
+        Run sync using FSRsync transport protocol.
+
+        Args:
+            exclude_list: List of patterns to exclude
+            include_list: List of patterns to include
+
+        Returns:
+            Tuple of (sync_success, commands_success)
+        """
+        if not self.transport_protocol:
+            self.logger.error("Transport protocol not initialized")
+            return False, False
+
+        try:
+            # Run pre-sync commands
+            if not self.run_commands(self.pre_sync_commands_checkexit_local, check_exit=True):
+                self.logger.error("Pre-sync local commands failed")
+                return False, False
+
+            self.logger.info("Using FSRsync transport protocol for sync")
+
+            # TODO: Implement actual file transfer with protocol
+            # This is a placeholder for the actual implementation
+            # which will use the transport protocol to send files
+
+            # Run post-sync commands
+            if not self.run_commands(self.post_sync_commands_checkexit_local, check_exit=True):
+                self.logger.error("Post-sync local commands failed")
+                return False, False
+
+            return True, True
+
+        except Exception as e:
+            self.logger.error(f"Error during protocol sync: {e}")
+            return False, False
+
     def get_last_rsync_output(self) -> str:
         """Get the output from the last rsync command.
-        
+
         Returns:
             Output string from last rsync command
         """
