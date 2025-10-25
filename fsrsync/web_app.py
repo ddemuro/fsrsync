@@ -64,6 +64,31 @@ try:
 except ImportError:
     HAS_FAILOVER_RECOVERY = False
 
+# Optional performance and lab modules
+try:
+    from .utils.performance_benchmarker import PerformanceBenchmarker
+    HAS_PERFORMANCE_BENCHMARKER = True
+except ImportError:
+    HAS_PERFORMANCE_BENCHMARKER = False
+
+try:
+    from .utils.metrics_collector import MetricsCollector
+    HAS_METRICS_COLLECTOR = True
+except ImportError:
+    HAS_METRICS_COLLECTOR = False
+
+try:
+    from .utils.network_simulator import NetworkSimulator
+    HAS_NETWORK_SIMULATOR = True
+except ImportError:
+    HAS_NETWORK_SIMULATOR = False
+
+try:
+    from .utils.profiler import FunctionProfiler, CPUProfiler, MemoryProfiler, PerformanceAnalyzer
+    HAS_PROFILER = True
+except ImportError:
+    HAS_PROFILER = False
+
 # Define request models for better validation
 class ServerLockRequest(BaseModel):
     server: str
@@ -251,6 +276,58 @@ class WebControl:
                         self.logger.warning(f"Failed to initialize FailoverRecoveryManager: {e}")
                 else:
                     self.logger.debug("FailoverRecoveryManager not available")
+
+                # Initialize PerformanceBenchmarker if available
+                self.performance_benchmarker = None
+                if HAS_PERFORMANCE_BENCHMARKER:
+                    try:
+                        self.performance_benchmarker = PerformanceBenchmarker(
+                            logger_instance=self.logger
+                        )
+                        self.logger.info("PerformanceBenchmarker initialized successfully")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to initialize PerformanceBenchmarker: {e}")
+                else:
+                    self.logger.debug("PerformanceBenchmarker not available")
+
+                # Initialize MetricsCollector if available
+                self.metrics_collector = None
+                if HAS_METRICS_COLLECTOR:
+                    try:
+                        self.metrics_collector = MetricsCollector(
+                            logger_instance=self.logger
+                        )
+                        self.logger.info("MetricsCollector initialized successfully")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to initialize MetricsCollector: {e}")
+                else:
+                    self.logger.debug("MetricsCollector not available")
+
+                # Initialize NetworkSimulator if available
+                self.network_simulator = None
+                if HAS_NETWORK_SIMULATOR:
+                    try:
+                        self.network_simulator = NetworkSimulator(
+                            logger_instance=self.logger
+                        )
+                        self.logger.info("NetworkSimulator initialized successfully")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to initialize NetworkSimulator: {e}")
+                else:
+                    self.logger.debug("NetworkSimulator not available")
+
+                # Initialize PerformanceAnalyzer if available
+                self.performance_analyzer = None
+                if HAS_PROFILER:
+                    try:
+                        self.performance_analyzer = PerformanceAnalyzer(
+                            logger_instance=self.logger
+                        )
+                        self.logger.info("PerformanceAnalyzer initialized successfully")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to initialize PerformanceAnalyzer: {e}")
+                else:
+                    self.logger.debug("PerformanceAnalyzer not available")
 
                 self.setup_routes()
                 self.initialized = True
@@ -1007,6 +1084,98 @@ class WebControl:
                 return {"status": "success", "protocol": stats, "timestamp": time.time()}
             except Exception as e:
                 self.logger.error(f"Error getting protocol stats: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        # ========== Performance Monitoring Endpoints ==========
+
+        @self.app.get("/api/performance/benchmarks")
+        async def get_benchmarks(_: bool = Depends(verify_secret_query)):
+            """Get performance benchmarks"""
+            try:
+                if not self.performance_benchmarker:
+                    return {"status": "disabled", "message": "Performance benchmarker not enabled"}
+
+                report = self.performance_benchmarker.get_performance_report()
+                return {"status": "success", "report": report, "timestamp": time.time()}
+            except Exception as e:
+                self.logger.error(f"Error getting benchmarks: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/performance/metrics")
+        async def get_metrics(_: bool = Depends(verify_secret_query)):
+            """Get collected metrics"""
+            try:
+                if not self.metrics_collector:
+                    return {"status": "disabled", "message": "Metrics collector not enabled"}
+
+                summary = self.metrics_collector.get_metrics_summary()
+                return {"status": "success", "metrics": summary, "timestamp": time.time()}
+            except Exception as e:
+                self.logger.error(f"Error getting metrics: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/performance/network")
+        async def get_network_status(_: bool = Depends(verify_secret_query)):
+            """Get network simulation status"""
+            try:
+                if not self.network_simulator:
+                    return {"status": "disabled", "message": "Network simulator not enabled"}
+
+                net_status = self.network_simulator.get_network_status()
+                return {"status": "success", "network": net_status, "timestamp": time.time()}
+            except Exception as e:
+                self.logger.error(f"Error getting network status: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/performance/analysis")
+        async def get_analysis(_: bool = Depends(verify_secret_query)):
+            """Get performance analysis"""
+            try:
+                if not self.performance_analyzer:
+                    return {"status": "disabled", "message": "Performance analyzer not enabled"}
+
+                report = self.performance_analyzer.get_optimization_report()
+                return {"status": "success", "analysis": report, "timestamp": time.time()}
+            except Exception as e:
+                self.logger.error(f"Error getting analysis: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/performance/alerts")
+        async def get_alerts(limit: int = Query(100, ge=1, le=1000),
+                            _: bool = Depends(verify_secret_query)):
+            """Get metric alerts"""
+            try:
+                if not self.metrics_collector:
+                    return {"alerts": [], "count": 0}
+
+                alerts = self.metrics_collector.get_alerts(limit=limit)
+                return {
+                    "status": "success",
+                    "alerts": alerts,
+                    "count": len(alerts),
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error getting alerts: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/performance/chaos-history")
+        async def get_chaos_history(limit: int = Query(100, ge=1, le=1000),
+                                   _: bool = Depends(verify_secret_query)):
+            """Get chaos scenario history"""
+            try:
+                if not self.network_simulator:
+                    return {"history": [], "count": 0}
+
+                history = self.network_simulator.get_chaos_history(limit=limit)
+                return {
+                    "status": "success",
+                    "history": history,
+                    "count": len(history),
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error getting chaos history: {str(e)}")
                 raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
     def run(self):
