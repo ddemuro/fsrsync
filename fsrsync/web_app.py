@@ -33,6 +33,37 @@ try:
 except ImportError:
     HAS_LOGGING_AGGREGATOR = False
 
+# Optional cluster support
+try:
+    from .utils.cluster_manager import ClusterManager
+    HAS_CLUSTER_MANAGER = True
+except ImportError:
+    HAS_CLUSTER_MANAGER = False
+
+try:
+    from .utils.cluster_protocol import ClusterProtocol
+    HAS_CLUSTER_PROTOCOL = True
+except ImportError:
+    HAS_CLUSTER_PROTOCOL = False
+
+try:
+    from .utils.consensus_engine import ConsensusEngine
+    HAS_CONSENSUS_ENGINE = True
+except ImportError:
+    HAS_CONSENSUS_ENGINE = False
+
+try:
+    from .utils.distributed_config import DistributedConfigManager
+    HAS_DISTRIBUTED_CONFIG = True
+except ImportError:
+    HAS_DISTRIBUTED_CONFIG = False
+
+try:
+    from .utils.failover_recovery import FailoverRecoveryManager
+    HAS_FAILOVER_RECOVERY = True
+except ImportError:
+    HAS_FAILOVER_RECOVERY = False
+
 # Define request models for better validation
 class ServerLockRequest(BaseModel):
     server: str
@@ -137,6 +168,89 @@ class WebControl:
                         self.logger.warning(f"Failed to initialize LogAggregator: {e}")
                 else:
                     self.logger.debug("LogAggregator not available")
+
+                # Initialize ClusterManager if available
+                self.cluster_manager = None
+                if HAS_CLUSTER_MANAGER:
+                    try:
+                        cluster_id = os.environ.get("CLUSTER_ID", "default_cluster")
+                        node_id = os.environ.get("NODE_ID", f"node_{uuid.uuid4().hex[:8]}")
+                        node_role = os.environ.get("NODE_ROLE", "worker")
+                        architecture = os.environ.get("CLUSTER_ARCH", "peer_to_peer")
+
+                        self.cluster_manager = ClusterManager(
+                            cluster_id=cluster_id,
+                            node_id=node_id,
+                            node_role=node_role,
+                            architecture=architecture,
+                            logger_instance=self.logger
+                        )
+                        self.logger.info(f"ClusterManager initialized successfully: "
+                                       f"cluster={cluster_id}, node={node_id}, role={node_role}")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to initialize ClusterManager: {e}")
+                else:
+                    self.logger.debug("ClusterManager not available")
+
+                # Initialize ClusterProtocol if available
+                self.cluster_protocol = None
+                if HAS_CLUSTER_PROTOCOL and self.cluster_manager:
+                    try:
+                        node_id = self.cluster_manager.node_id
+                        self.cluster_protocol = ClusterProtocol(
+                            node_id=node_id,
+                            logger_instance=self.logger
+                        )
+                        self.logger.info("ClusterProtocol initialized successfully")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to initialize ClusterProtocol: {e}")
+                else:
+                    self.logger.debug("ClusterProtocol not available")
+
+                # Initialize ConsensusEngine if available
+                self.consensus_engine = None
+                if HAS_CONSENSUS_ENGINE and self.cluster_manager:
+                    try:
+                        node_id = self.cluster_manager.node_id
+                        cluster_nodes = list(self.cluster_manager.nodes.keys()) or [node_id]
+
+                        self.consensus_engine = ConsensusEngine(
+                            node_id=node_id,
+                            cluster_nodes=cluster_nodes,
+                            logger_instance=self.logger
+                        )
+                        self.logger.info("ConsensusEngine initialized successfully")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to initialize ConsensusEngine: {e}")
+                else:
+                    self.logger.debug("ConsensusEngine not available")
+
+                # Initialize DistributedConfigManager if available
+                self.distributed_config = None
+                if HAS_DISTRIBUTED_CONFIG:
+                    try:
+                        self.distributed_config = DistributedConfigManager(
+                            logger_instance=self.logger
+                        )
+                        self.logger.info("DistributedConfigManager initialized successfully")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to initialize DistributedConfigManager: {e}")
+                else:
+                    self.logger.debug("DistributedConfigManager not available")
+
+                # Initialize FailoverRecoveryManager if available
+                self.failover_recovery = None
+                if HAS_FAILOVER_RECOVERY and self.cluster_manager:
+                    try:
+                        self.failover_recovery = FailoverRecoveryManager(
+                            cluster_manager=self.cluster_manager,
+                            logger_instance=self.logger
+                        )
+                        self.logger.info("FailoverRecoveryManager initialized successfully")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to initialize FailoverRecoveryManager: {e}")
+                else:
+                    self.logger.debug("FailoverRecoveryManager not available")
 
                 self.setup_routes()
                 self.initialized = True
@@ -786,6 +900,113 @@ class WebControl:
                 }
             except Exception as e:
                 self.logger.error(f"Error getting component logs: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        # ========== Cluster Management Endpoints ==========
+
+        @self.app.get("/api/cluster/status")
+        async def get_cluster_status(_: bool = Depends(verify_secret_query)):
+            """Get cluster status"""
+            try:
+                if not self.cluster_manager:
+                    return {"status": "disabled", "message": "Cluster management not enabled"}
+
+                status = self.cluster_manager.get_cluster_summary()
+                return {"status": "success", "cluster": status, "timestamp": time.time()}
+            except Exception as e:
+                self.logger.error(f"Error getting cluster status: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/cluster/nodes")
+        async def get_cluster_nodes(_: bool = Depends(verify_secret_query)):
+            """Get all cluster nodes"""
+            try:
+                if not self.cluster_manager:
+                    return {"nodes": [], "count": 0}
+
+                nodes = []
+                for node_id, node in self.cluster_manager.nodes.items():
+                    nodes.append({
+                        'id': node_id,
+                        'hostname': node.hostname,
+                        'port': node.port,
+                        'role': node.role.value,
+                        'health': node.health_status.value,
+                        'cpu_usage': node.cpu_usage,
+                        'memory_usage': node.memory_usage,
+                        'disk_usage': node.disk_usage,
+                        'active_syncs': node.active_syncs,
+                        'total_syncs': node.total_syncs
+                    })
+
+                return {
+                    "nodes": nodes,
+                    "count": len(nodes),
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error getting cluster nodes: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/cluster/consensus")
+        async def get_consensus_status(_: bool = Depends(verify_secret_query)):
+            """Get consensus engine status"""
+            try:
+                if not self.consensus_engine:
+                    return {"status": "disabled", "message": "Consensus engine not enabled"}
+
+                status = self.consensus_engine.get_consensus_status()
+                return {"status": "success", "consensus": status, "timestamp": time.time()}
+            except Exception as e:
+                self.logger.error(f"Error getting consensus status: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/cluster/config")
+        async def get_cluster_config(environment: str = Query("production"),
+                                    _: bool = Depends(verify_secret_query)):
+            """Get distributed configuration"""
+            try:
+                if not self.distributed_config:
+                    return {"config": {}, "message": "Distributed config not enabled"}
+
+                config = self.distributed_config.get_config(environment)
+                status = self.distributed_config.get_config_status(environment)
+
+                return {
+                    "status": "success",
+                    "environment": environment,
+                    "config": config,
+                    "config_status": status,
+                    "timestamp": time.time()
+                }
+            except Exception as e:
+                self.logger.error(f"Error getting cluster config: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/cluster/failover")
+        async def get_failover_status(_: bool = Depends(verify_secret_query)):
+            """Get failover and recovery status"""
+            try:
+                if not self.failover_recovery:
+                    return {"status": "disabled", "message": "Failover recovery not enabled"}
+
+                status = self.failover_recovery.get_failover_status()
+                return {"status": "success", "failover": status, "timestamp": time.time()}
+            except Exception as e:
+                self.logger.error(f"Error getting failover status: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/api/cluster/protocol")
+        async def get_protocol_stats(_: bool = Depends(verify_secret_query)):
+            """Get cluster protocol statistics"""
+            try:
+                if not self.cluster_protocol:
+                    return {"stats": {}, "message": "Cluster protocol not enabled"}
+
+                stats = self.cluster_protocol.get_protocol_stats()
+                return {"status": "success", "protocol": stats, "timestamp": time.time()}
+            except Exception as e:
+                self.logger.error(f"Error getting protocol stats: {str(e)}")
                 raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
     def run(self):
