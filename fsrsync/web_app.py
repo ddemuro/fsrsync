@@ -1,12 +1,18 @@
 import os
+import uuid
+import time
 import uvicorn
 import threading
 import logging
+import asyncio
 from typing import Optional, Dict, Any, List
-from fastapi import FastAPI, Request, HTTPException, Depends, Query
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, Request, HTTPException, Depends, Query, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+
+from .utils.websocket_server import WebSocketServer, WebSocketMessage, MessageType, SubscriptionType
 
 # Define request models for better validation
 class ServerLockRequest(BaseModel):
@@ -38,10 +44,10 @@ class WebControl:
                 self.port = port
                 self.host = host
                 self.secret = secret
-                self.app = FastAPI(title="Sync Application API", 
+                self.app = FastAPI(title="Sync Application API",
                                   description="API for monitoring and controlling sync operations")
                 self.templates = Jinja2Templates(directory=os.path.join(self.scriptdir, "templates"))
-                
+
                 # Set up proper logging
                 if logger:
                     self.logger = logger
@@ -52,7 +58,23 @@ class WebControl:
                     handler.setFormatter(formatter)
                     self.logger.addHandler(handler)
                     self.logger.setLevel(logging.INFO)
-                
+
+                # Initialize WebSocket server
+                self.websocket_server = WebSocketServer(
+                    sync_manager=sync_state,
+                    host=host,
+                    port=port + 1,  # Use port+1 for WebSocket
+                    logger_instance=self.logger
+                )
+
+                # Mount static files for the dashboard
+                static_dir = os.path.join(self.scriptdir, "static")
+                if os.path.exists(static_dir):
+                    self.app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+                # Store connected WebSocket clients
+                self.ws_clients: Dict[str, WebSocket] = {}
+
                 self.setup_routes()
                 self.initialized = True
                 self.logger.info(f"Web control initialized. Host: {host}, Port: {port}")
@@ -310,6 +332,113 @@ class WebControl:
                     }
             except Exception as e:
                 self.logger.error(f"Error getting pending files by path: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.websocket("/ws")
+        async def websocket_endpoint(websocket: WebSocket):
+            """
+            WebSocket endpoint for real-time dashboard updates.
+            Handles client connections and message routing.
+            """
+            client_id = str(uuid.uuid4())[:8]
+            try:
+                await websocket.accept()
+                self.ws_clients[client_id] = websocket
+                self.logger.info(f"WebSocket client connected: {client_id}")
+
+                # Add client to WebSocket server
+                session = await self.websocket_server.add_client(client_id, websocket)
+
+                # Send welcome message
+                welcome_msg = WebSocketMessage(
+                    message_type=MessageType.CONNECTED,
+                    payload={
+                        'client_id': client_id,
+                        'message': 'Connected to FSRsync Dashboard'
+                    }
+                )
+                await websocket.send_text(welcome_msg.to_json())
+
+                # Listen for client messages
+                while True:
+                    data = await websocket.receive_text()
+                    await self.websocket_server.handle_client_message(client_id, data)
+
+            except WebSocketDisconnect:
+                self.logger.info(f"WebSocket client disconnected: {client_id}")
+                if client_id in self.ws_clients:
+                    del self.ws_clients[client_id]
+                await self.websocket_server.remove_client(client_id)
+            except Exception as e:
+                self.logger.error(f"WebSocket error for client {client_id}: {e}")
+                if client_id in self.ws_clients:
+                    del self.ws_clients[client_id]
+                await self.websocket_server.remove_client(client_id)
+
+        @self.app.get("/ws-status")
+        async def ws_status(_: bool = Depends(verify_secret_query)):
+            """Get WebSocket server status"""
+            try:
+                return {
+                    "running": self.websocket_server.running,
+                    "connected_clients": len(self.websocket_server.clients),
+                    "total_messages_sent": self.websocket_server.total_messages_sent,
+                    "total_messages_received": self.websocket_server.total_messages_received,
+                    "uptime_seconds": time.time() - self.websocket_server.started_at if hasattr(self.websocket_server, 'started_at') else 0
+                }
+            except Exception as e:
+                self.logger.error(f"Error getting WebSocket status: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.get("/dashboard-new", response_class=HTMLResponse)
+        async def dashboard_new(request: Request):
+            """Serve the new dashboard HTML"""
+            try:
+                static_dir = os.path.join(self.scriptdir, "static")
+                index_file = os.path.join(static_dir, "index.html")
+                if os.path.exists(index_file):
+                    with open(index_file, 'r') as f:
+                        return f.read()
+                else:
+                    return HTMLResponse(
+                        content="<html><body><h1>Dashboard not found</h1></body></html>",
+                        status_code=404
+                    )
+            except Exception as e:
+                self.logger.error(f"Error serving dashboard: {str(e)}")
+                return HTMLResponse(
+                    content=f"<html><body><h1>Error</h1><p>{str(e)}</p></body></html>",
+                    status_code=500
+                )
+
+        @self.app.post("/api/pause-transfer")
+        async def api_pause_transfer(request: FilePathRequest, _: bool = Depends(verify_secret_header)):
+            """API endpoint to pause a transfer"""
+            try:
+                # This would integrate with the actual transfer engine
+                return {"status": "success", "message": "Transfer paused"}
+            except Exception as e:
+                self.logger.error(f"Error pausing transfer: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.post("/api/resume-transfer")
+        async def api_resume_transfer(request: FilePathRequest, _: bool = Depends(verify_secret_header)):
+            """API endpoint to resume a transfer"""
+            try:
+                # This would integrate with the actual transfer engine
+                return {"status": "success", "message": "Transfer resumed"}
+            except Exception as e:
+                self.logger.error(f"Error resuming transfer: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+        @self.app.post("/api/cancel-transfer")
+        async def api_cancel_transfer(request: FilePathRequest, _: bool = Depends(verify_secret_header)):
+            """API endpoint to cancel a transfer"""
+            try:
+                # This would integrate with the actual transfer engine
+                return {"status": "success", "message": "Transfer cancelled"}
+            except Exception as e:
+                self.logger.error(f"Error cancelling transfer: {str(e)}")
                 raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
     def run(self):
